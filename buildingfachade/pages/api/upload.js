@@ -8,10 +8,12 @@ export const config = {
   },
 };
 
-const upload = (req, res) => {
-  const form = new formidable.IncomingForm();
-  form.uploadDir = "./public/uploads";
-  form.keepExtensions = true;
+const upload = async (req, res) => {
+  const form = formidable({
+    multiples: true,
+    uploadDir: "./public/uploads",
+    keepExtensions: true,
+  });
 
   form.parse(req, (err, fields, files) => {
     if (err) {
@@ -20,8 +22,8 @@ const upload = (req, res) => {
 
     // Aquí puedes procesar los archivos subidos
     const uploadedFiles = Object.values(files).map((file) => ({
-      name: file.name,
-      path: file.path,
+      name: file.originalFilename,
+      path: file.filepath,
     }));
 
     res.status(200).json({ files: uploadedFiles });
