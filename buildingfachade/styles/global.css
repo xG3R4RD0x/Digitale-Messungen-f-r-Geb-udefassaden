@@ -25,3 +25,18 @@ body {
     text-wrap: balance;
   }
 }
+
+.btn {
+  font-weight: bold;
+  padding: 0.5rem 1rem; /* py-2 px-4 */
+  border-radius: 0.25rem; /* rounded */
+}
+
+.btn-blue {
+  background-color: #3b82f6; /* bg-blue-500 */
+  color: white; /* text-white */
+}
+
+.btn-blue:hover {
+  background-color: #1e40af; /* bg-blue-700 */
+}
