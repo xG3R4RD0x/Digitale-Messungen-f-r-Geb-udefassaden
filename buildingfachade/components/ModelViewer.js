@@ -25,28 +25,36 @@ function Model({ path }) {
 }
 
 // Rotation Controls
-function RotationControls() {
+function RotationControls({ cameraRef, modelRef }) {
   // const { gl, scene, camera } = useThree();
 
   const views = [
-    { position: [-50, 0, 0], up: [0, 1, 0], name: "Vista Derecha" },
-    { position: [50, 0, 0], up: [0, 1, 0], name: "Vista Izquierda" },
-    { position: [0, 0, 50], up: [0, 1, 0], name: "Vista Trasera" },
-    { position: [0, 0, -50], up: [0, 1, 0], name: "Vista Frontal" },
-    { position: [0, 50, 0], up: [0, 0, 1], name: "Vista Superior" },
+    { position: [-20, 0, 0], up: [0, 1, 0], name: "Vista Derecha" },
+    { position: [20, 0, 0], up: [0, 1, 0], name: "Vista Izquierda" },
+    { position: [0, 0, 20], up: [0, 1, 0], name: "Vista Trasera" },
+    { position: [0, 0, -20], up: [0, 1, 0], name: "Vista Frontal" },
+    { position: [0, 20, 0], up: [0, 0, 1], name: "Vista Superior" },
   ];
 
-  // const rotateModel = (view) => {
-  //   camera.position.set(...view.position);
-  //   camera.up.set(...view.up);
-  //   camera.lookAt(0, 0, 0);
-  //   gl.render(scene, camera);
-  // };
+  const rotateModel = (view) => {
+    const camera = cameraRef.current;
+    const model = modelRef.current;
+
+    if (camera && model) {
+      camera.position.set(...view.position);
+      camera.up.set(...view.up);
+      camera.lookAt(model.position);
+    }
+  };
 
   return (
     <div>
       {views.map((view) => (
-        <button class="btn btn-blue" key={view.name}>
+        <button
+          className="btn btn-blue"
+          key={view.name}
+          onClick={() => rotateModel(view)}
+        >
           {view.name}
         </button>
       ))}
@@ -65,7 +73,12 @@ export default function ModelViewer() {
         style={{ height: "240px", width: "426", position: "relative" }}
       >
         {/* Aquí se ve el objeto 3d en la ventana */}
-        <Canvas camera={{ position: [0, 0, 25], fov: 45 }} ref={cameraRef}>
+        <Canvas
+          camera={{ position: [0, 0, 25], fov: 45 }}
+          onCreated={({ camera }) => {
+            cameraRef.current = camera;
+          }}
+        >
           <ambientLight intensity={0.5} />
           <directionalLight
             position={[5, 5, 5]}
@@ -81,7 +94,7 @@ export default function ModelViewer() {
         </Canvas>
       </div>
       {/* Rotation Controls */}
-      <RotationControls />
+      <RotationControls cameraRef={cameraRef} modelRef={modelRef} />
     </div>
   );
 }
