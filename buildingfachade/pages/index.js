@@ -1,7 +1,7 @@
 // pages/index.js
-// import UploadComponent from "../components/UploadComponent";
-// import React from "react";
-// import ModelViewer from "../components/ModelViewer";
+import UploadComponent from "../components/UploadComponent";
+import React from "react";
+import ModelViewer from "../components/ModelViewer";
 
 const Home = () => {
   const handleUpload = (data) => {
@@ -19,10 +19,10 @@ const Home = () => {
             Upload your images to start the 3D reconstruction process.
           </p>
         </div>
-        {/* <UploadComponent onUpload={handleUpload} /> */}
+        <UploadComponent onUpload={handleUpload} />
       </div>
       <h1>Visor 3D con Captura de Vistas</h1>
-      {/* <ModelViewer /> */}
+      <ModelViewer />
     </div>
   );
 };
