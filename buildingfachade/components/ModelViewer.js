@@ -74,7 +74,9 @@ function CaptureView({ gl, scene, camera, addImage }) {
   );
 }
 
-export default function ModelViewer() {
+export default function ModelViewer({ modelName }) {
+  const objPath = `/models/${modelName}.obj`;
+  const mtlPath = `/models/${modelName}.mtl`;
   const modelRef = useRef();
   const cameraRef = useRef();
   const [gl, setGl] = useState(null);
@@ -124,10 +126,7 @@ export default function ModelViewer() {
             shadow-mapSize-height={1024}
           />
           <group ref={modelRef}>
-            <Model
-              objPath="/models/summer-palace-02.obj"
-              mtlPath="/models/summer-palace-02.mtl"
-            />
+            <Model objPath={objPath} mtlPath={mtlPath} />
           </group>
           <OrbitControls />
         </Canvas>

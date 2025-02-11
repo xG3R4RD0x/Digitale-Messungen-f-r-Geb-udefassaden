@@ -22,7 +22,7 @@ const Home = () => {
         <UploadComponent onUpload={handleUpload} />
       </div>
       <h1>Visor 3D con Captura de Vistas</h1>
-      <ModelViewer />
+      <ModelViewer modelName="Bambo_House" />
     </div>
   );
 };
