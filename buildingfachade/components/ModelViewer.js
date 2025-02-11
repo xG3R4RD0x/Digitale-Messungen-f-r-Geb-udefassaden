@@ -149,7 +149,7 @@ export default function ModelViewer({ modelName }) {
         {images.map((image, index) => (
           <div key={index} className="mb-4">
             <img src={image.url} alt={`Captura del modelo - ${image.view}`} />
-            <p>{image.view}</p>
+            <p className="text-sm font-semibold text-gray-700">{image.view}</p>
           </div>
         ))}
       </div>
