@@ -2,3 +2,4 @@ papers/
 *.obj
 *.onnx
 *.ort
+*.mtl

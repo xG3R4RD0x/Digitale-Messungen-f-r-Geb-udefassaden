@@ -3,7 +3,7 @@ import { Html, OrbitControls } from "@react-three/drei";
 
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader";
 import * as THREE from "three";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 function Model({ path }) {
   const obj = useLoader(OBJLoader, path);
@@ -62,9 +62,30 @@ function RotationControls({ cameraRef, modelRef }) {
   );
 }
 
+function CaptureView({ gl, scene, camera }) {
+  const capturarImagen = () => {
+    if (gl && scene && camera) {
+      gl.render(scene, camera);
+      const link = document.createElement("a");
+      link.download = `captura.png`;
+      link.href = gl.domElement.toDataURL("image/png");
+      link.click();
+    }
+  };
+
+  return (
+    <button className="btn btn-green" onClick={() => capturarImagen()}>
+      Generar Imagen
+    </button>
+  );
+}
+
 export default function ModelViewer() {
   const modelRef = useRef();
   const cameraRef = useRef();
+  const [gl, setGl] = useState(null);
+  const [scene, setScene] = useState(null);
+  const [camera, setCamera] = useState(null);
 
   return (
     <div className="flex flex-col items-center justify-center">
@@ -75,7 +96,10 @@ export default function ModelViewer() {
         {/* Aquí se ve el objeto 3d en la ventana */}
         <Canvas
           camera={{ position: [0, 0, 30], fov: 45 }} // Ajusta la posición de la cámara aquí
-          onCreated={({ camera }) => {
+          onCreated={({ gl, scene, camera }) => {
+            setGl(gl);
+            setScene(scene);
+            setCamera(camera);
             cameraRef.current = camera;
           }}
         >
@@ -95,6 +119,9 @@ export default function ModelViewer() {
       </div>
       {/* Rotation Controls */}
       <RotationControls cameraRef={cameraRef} modelRef={modelRef} />
+      {gl && scene && camera && (
+        <CaptureView gl={gl} scene={scene} camera={camera} />
+      )}
     </div>
   );
 }

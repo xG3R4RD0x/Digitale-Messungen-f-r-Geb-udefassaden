@@ -38,3 +38,11 @@ body {
 .btn-blue:hover {
   background-color: #1e40af; /* bg-blue-700 */
 }
+.btn-green {
+  background-color: #008000; /* bg-blue-500 */
+  color: white; /* text-white */
+}
+
+.btn-green:hover {
+  background-color: #006400; /* bg-blue-700 */
+}
