@@ -1,21 +1,19 @@
-import { Canvas, useLoader, useThree } from "@react-three/fiber";
+import { Canvas, useLoader } from "@react-three/fiber";
 import { Html, OrbitControls } from "@react-three/drei";
-
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader";
+import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader";
 import * as THREE from "three";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 
-function Model({ path }) {
-  const obj = useLoader(OBJLoader, path);
+function Model({ objPath, mtlPath }) {
+  const materials = useLoader(MTLLoader, mtlPath);
+  const obj = useLoader(OBJLoader, objPath, (loader) => {
+    materials.preload();
+    loader.setMaterials(materials);
+  });
 
   obj.traverse((child) => {
     if (child.isMesh) {
-      child.material = new THREE.MeshStandardMaterial({
-        color: "#cccccc",
-        flatShading: true,
-        metalness: 0.1,
-        roughness: 0.8,
-      });
       child.castShadow = true;
       child.receiveShadow = true;
     }
@@ -24,10 +22,7 @@ function Model({ path }) {
   return <primitive object={obj} />;
 }
 
-// Rotation Controls
 function RotationControls({ cameraRef, modelRef }) {
-  // const { gl, scene, camera } = useThree();
-
   const views = [
     { position: [-30, 0, 0], up: [0, 1, 0], name: "Vista Derecha" },
     { position: [30, 0, 0], up: [0, 1, 0], name: "Vista Izquierda" },
@@ -62,14 +57,12 @@ function RotationControls({ cameraRef, modelRef }) {
   );
 }
 
-function CaptureView({ gl, scene, camera }) {
+function CaptureView({ gl, scene, camera, setImageUrl }) {
   const capturarImagen = () => {
     if (gl && scene && camera) {
       gl.render(scene, camera);
-      const link = document.createElement("a");
-      link.download = `captura.png`;
-      link.href = gl.domElement.toDataURL("image/png");
-      link.click();
+      const dataUrl = gl.domElement.toDataURL("image/png");
+      setImageUrl(dataUrl);
     }
   };
 
@@ -86,6 +79,7 @@ export default function ModelViewer() {
   const [gl, setGl] = useState(null);
   const [scene, setScene] = useState(null);
   const [camera, setCamera] = useState(null);
+  const [imageUrl, setImageUrl] = useState(null);
 
   return (
     <div className="flex flex-col items-center justify-center">
@@ -93,7 +87,6 @@ export default function ModelViewer() {
         className="bg-white"
         style={{ height: "300px", width: "400px", position: "relative" }} // Ajusta el tamaño del Canvas aquí
       >
-        {/* Aquí se ve el objeto 3d en la ventana */}
         <Canvas
           camera={{ position: [0, 0, 30], fov: 45 }} // Ajusta la posición de la cámara aquí
           onCreated={({ gl, scene, camera }) => {
@@ -112,7 +105,10 @@ export default function ModelViewer() {
             shadow-mapSize-height={1024}
           />
           <group ref={modelRef}>
-            <Model path="/models/casa.obj" />
+            <Model
+              objPath="/models/summer-palace-02.obj"
+              mtlPath="/models/summer-palace-02.mtl"
+            />
           </group>
           <OrbitControls />
         </Canvas>
@@ -120,7 +116,17 @@ export default function ModelViewer() {
       {/* Rotation Controls */}
       <RotationControls cameraRef={cameraRef} modelRef={modelRef} />
       {gl && scene && camera && (
-        <CaptureView gl={gl} scene={scene} camera={camera} />
+        <CaptureView
+          gl={gl}
+          scene={scene}
+          camera={camera}
+          setImageUrl={setImageUrl}
+        />
+      )}
+      {imageUrl && (
+        <div className="mt-4 bg-white">
+          <img src={imageUrl} alt="Captura del modelo" />
+        </div>
       )}
     </div>
   );
