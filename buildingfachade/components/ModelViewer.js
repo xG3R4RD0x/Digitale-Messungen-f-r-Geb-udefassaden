@@ -69,7 +69,7 @@ export default function ModelViewer() {
   return (
     <div>
       <div
-        class="bg-white"
+        className="bg-white"
         style={{ height: "240px", width: "426", position: "relative" }}
       >
         {/* Aquí se ve el objeto 3d en la ventana */}
