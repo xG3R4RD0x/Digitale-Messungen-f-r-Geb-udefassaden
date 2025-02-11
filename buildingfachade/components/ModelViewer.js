@@ -22,7 +22,7 @@ function Model({ objPath, mtlPath }) {
   return <primitive object={obj} />;
 }
 
-function RotationControls({ cameraRef, modelRef }) {
+function RotationControls({ cameraRef, modelRef, setSelectedView }) {
   const views = [
     { position: [-30, 0, 0], up: [0, 1, 0], name: "Vista Derecha" },
     { position: [30, 0, 0], up: [0, 1, 0], name: "Vista Izquierda" },
@@ -39,6 +39,7 @@ function RotationControls({ cameraRef, modelRef }) {
       camera.position.set(...view.position);
       camera.up.set(...view.up);
       camera.lookAt(model.position);
+      setSelectedView(view.name);
     }
   };
 
@@ -57,12 +58,12 @@ function RotationControls({ cameraRef, modelRef }) {
   );
 }
 
-function CaptureView({ gl, scene, camera, setImageUrl }) {
+function CaptureView({ gl, scene, camera, addImage }) {
   const capturarImagen = () => {
     if (gl && scene && camera) {
       gl.render(scene, camera);
       const dataUrl = gl.domElement.toDataURL("image/png");
-      setImageUrl(dataUrl);
+      addImage(dataUrl);
     }
   };
 
@@ -79,7 +80,25 @@ export default function ModelViewer() {
   const [gl, setGl] = useState(null);
   const [scene, setScene] = useState(null);
   const [camera, setCamera] = useState(null);
-  const [imageUrl, setImageUrl] = useState(null);
+  const [images, setImages] = useState([]);
+  const [selectedView, setSelectedView] = useState("");
+
+  const addImage = (dataUrl) => {
+    const existingImageIndex = images.findIndex(
+      (image) => image.view === selectedView
+    );
+    if (existingImageIndex !== -1) {
+      const updatedImages = [...images];
+      updatedImages[existingImageIndex] = { url: dataUrl, view: selectedView };
+      setImages(updatedImages);
+    } else {
+      if (images.length < 5) {
+        setImages([...images, { url: dataUrl, view: selectedView }]);
+      } else {
+        alert("Máximo de 5 imágenes alcanzado");
+      }
+    }
+  };
 
   return (
     <div className="flex flex-col items-center justify-center">
@@ -114,20 +133,27 @@ export default function ModelViewer() {
         </Canvas>
       </div>
       {/* Rotation Controls */}
-      <RotationControls cameraRef={cameraRef} modelRef={modelRef} />
+      <RotationControls
+        cameraRef={cameraRef}
+        modelRef={modelRef}
+        setSelectedView={setSelectedView}
+      />
       {gl && scene && camera && (
         <CaptureView
           gl={gl}
           scene={scene}
           camera={camera}
-          setImageUrl={setImageUrl}
+          addImage={addImage}
         />
       )}
-      {imageUrl && (
-        <div className="mt-4 bg-white">
-          <img src={imageUrl} alt="Captura del modelo" />
-        </div>
-      )}
+      <div className="mt-4 bg-white">
+        {images.map((image, index) => (
+          <div key={index} className="mb-4">
+            <img src={image.url} alt={`Captura del modelo - ${image.view}`} />
+            <p>{image.view}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
