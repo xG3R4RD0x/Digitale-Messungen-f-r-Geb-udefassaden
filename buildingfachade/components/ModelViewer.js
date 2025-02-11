@@ -29,11 +29,11 @@ function RotationControls({ cameraRef, modelRef }) {
   // const { gl, scene, camera } = useThree();
 
   const views = [
-    { position: [-20, 0, 0], up: [0, 1, 0], name: "Vista Derecha" },
-    { position: [20, 0, 0], up: [0, 1, 0], name: "Vista Izquierda" },
-    { position: [0, 0, 20], up: [0, 1, 0], name: "Vista Trasera" },
-    { position: [0, 0, -20], up: [0, 1, 0], name: "Vista Frontal" },
-    { position: [0, 20, 0], up: [0, 0, 1], name: "Vista Superior" },
+    { position: [-30, 0, 0], up: [0, 1, 0], name: "Vista Derecha" },
+    { position: [30, 0, 0], up: [0, 1, 0], name: "Vista Izquierda" },
+    { position: [0, 0, 30], up: [0, 1, 0], name: "Vista Trasera" },
+    { position: [0, 0, -30], up: [0, 1, 0], name: "Vista Frontal" },
+    { position: [0, 30, 0], up: [0, 0, 1], name: "Vista Superior" },
   ];
 
   const rotateModel = (view) => {
@@ -67,21 +67,21 @@ export default function ModelViewer() {
   const cameraRef = useRef();
 
   return (
-    <div>
+    <div className="flex flex-col items-center justify-center">
       <div
         className="bg-white"
-        style={{ height: "240px", width: "426", position: "relative" }}
+        style={{ height: "300px", width: "400px", position: "relative" }} // Ajusta el tamaño del Canvas aquí
       >
         {/* Aquí se ve el objeto 3d en la ventana */}
         <Canvas
-          camera={{ position: [0, 0, 25], fov: 45 }}
+          camera={{ position: [0, 0, 30], fov: 45 }} // Ajusta la posición de la cámara aquí
           onCreated={({ camera }) => {
             cameraRef.current = camera;
           }}
         >
           <ambientLight intensity={0.5} />
           <directionalLight
-            position={[5, 5, 5]}
+            position={[10, 10, 10]}
             intensity={1}
             castShadow
             shadow-mapSize-width={1024}

@@ -1,4 +1,4 @@
 papers/
 *.obj
-.onnx
-.ort
+*.onnx
+*.ort
