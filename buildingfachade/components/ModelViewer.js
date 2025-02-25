@@ -4,7 +4,7 @@ import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader";
 import { MTLLoader } from "three/examples/jsm/loaders/MTLLoader";
 import * as THREE from "three";
 import { useRef, useState, useEffect } from "react";
-
+import ImageMask from "./ImageMask";
 function Model({ objPath, mtlPath }) {
   const materials = useLoader(MTLLoader, mtlPath);
   const obj = useLoader(OBJLoader, objPath, (loader) => {
@@ -148,7 +148,11 @@ export default function ModelViewer({ modelName }) {
       <div className="mt-4 bg-white">
         {images.map((image, index) => (
           <div key={index} className="mb-4">
-            <img src={image.url} alt={`Captura del modelo - ${image.view}`} />
+            {/* <img src={image.url} alt={`Captura del modelo - ${image.view}`} /> */}
+            <ImageMask
+              imageUrl={image.url}
+              instanceId={`model-side-${image.view}`}
+            />
             <p className="text-sm font-semibold text-gray-700">{image.view}</p>
           </div>
         ))}

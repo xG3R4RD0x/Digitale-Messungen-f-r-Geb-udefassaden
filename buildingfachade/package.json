@@ -12,6 +12,7 @@
     "@react-three/drei": "^9.121.4",
     "@react-three/fiber": "^8.17.14",
     "@tailwindcss/postcss": "^4.0.5",
+    "@techstark/opencv-js": "^4.10.0-release.1",
     "autoprefixer": "^10.4.20",
     "next": "latest",
     "postcss": "^8.5.1",
