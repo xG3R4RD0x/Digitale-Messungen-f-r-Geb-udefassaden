@@ -1,10 +1,10 @@
 import "../styles/global.css";
-
-// import Layout from "../components/layout";
+import Navigation from "../components/Navigation";
 
 export default function App({ Component, pageProps }) {
   return (
     <>
+      <Navigation />
       <Component {...pageProps} />
     </>
   );
