@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useOpenCV } from "../contexts/OpenCVContext";
 
 export default function GrabCutComponent({ imageUrl }) {
   const canvasRef = useRef(null);
@@ -7,7 +8,7 @@ export default function GrabCutComponent({ imageUrl }) {
   const [isSelecting, setIsSelecting] = useState(false);
   const [startPoint, setStartPoint] = useState({ x: 0, y: 0 });
   const [endPoint, setEndPoint] = useState({ x: 0, y: 0 });
-  const [isOpenCVReady, setIsOpenCVReady] = useState(false);
+  const { isOpenCVReady } = useOpenCV();
   const [imageDimensions, setImageDimensions] = useState({
     width: 0,
     height: 0,
@@ -17,40 +18,6 @@ export default function GrabCutComponent({ imageUrl }) {
   const [errorMessage, setErrorMessage] = useState("");
   // Track if we're in multi-selection mode
   const [multiSelectMode, setMultiSelectMode] = useState(false);
-
-  // Load OpenCV.js
-  useEffect(() => {
-    if (window.cv) {
-      console.log("OpenCV is already loaded.");
-      setIsOpenCVReady(true);
-      return;
-    }
-
-    console.log("Loading OpenCV.js...");
-    const script = document.createElement("script");
-    script.src = "https://docs.opencv.org/4.5.0/opencv.js";
-    script.async = true;
-    script.onload = () => {
-      console.log("OpenCV.js script loaded.");
-      if (window.cv) {
-        console.log("OpenCV object is available.");
-        setIsOpenCVReady(true);
-      } else {
-        console.log("Setting up Module for OpenCV initialization...");
-        window.Module = {
-          onRuntimeInitialized: () => {
-            console.log("OpenCV runtime initialized.");
-            setIsOpenCVReady(true);
-          },
-        };
-      }
-    };
-    document.body.appendChild(script);
-
-    return () => {
-      // No need to remove script as it's useful to keep OpenCV loaded
-    };
-  }, []);
 
   // Load and display the image
   useEffect(() => {
