@@ -32,9 +32,7 @@ export default function ImageMask({ imageUrl, instanceId }) {
   const [hasSelection, setHasSelection] = useState(false);
   const [isMaskApplied, setIsMaskApplied] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [toolMessage, setToolMessage] = useState("");
-
   // Cargar y mostrar la imagen
   useEffect(() => {
     if (!imageUrl) return;
@@ -43,7 +41,6 @@ export default function ImageMask({ imageUrl, instanceId }) {
     image.src = imageUrl;
     image.onload = () => {
       // Calcular dimensiones manteniendo el ratio de aspecto original
-      // Usamos 0.35 para dar espacio a la UI
       const maxWidth = window.innerWidth * 0.35;
       const maxHeight = window.innerHeight * 0.7;
 
@@ -80,7 +77,6 @@ export default function ImageMask({ imageUrl, instanceId }) {
       setHasSelection(false);
       setIsMaskApplied(false);
       setErrorMessage("");
-      setMultiSelectMode(false);
 
       // Establecer mensaje inicial de ayuda
       setToolMessage(
@@ -106,15 +102,8 @@ export default function ImageMask({ imageUrl, instanceId }) {
   const handleGrabCut = () => {
     setErrorMessage("");
 
-    if (!isOpenCVReady) {
+    if (!isOpenCVReady || !window.cv) {
       setErrorMessage("OpenCV no está listo aún. Por favor, espere.");
-      return;
-    }
-
-    if (!window.cv) {
-      setErrorMessage(
-        "Biblioteca OpenCV no encontrada. Intente refrescar la página."
-      );
       return;
     }
 
@@ -122,7 +111,6 @@ export default function ImageMask({ imageUrl, instanceId }) {
     let src, mask, bgdModel, fgdModel;
 
     try {
-      console.log("Iniciando operación GrabCut...");
       const cv = window.cv;
 
       // Validar dimensiones de selección
@@ -136,19 +124,11 @@ export default function ImageMask({ imageUrl, instanceId }) {
         return;
       }
 
-      console.log("Leyendo imagen desde canvas...");
+      // Leer imagen desde canvas
       src = cv.imread(canvasRef.current);
-
       if (!src || src.empty()) {
         throw new Error("No se pudo leer la imagen desde el canvas.");
       }
-
-      console.log(
-        "Imagen leída correctamente. Dimensiones:",
-        src.rows,
-        "x",
-        src.cols
-      );
 
       // Crear máscara y modelos
       mask = new cv.Mat();
@@ -163,14 +143,6 @@ export default function ImageMask({ imageUrl, instanceId }) {
         rectHeight
       );
 
-      console.log(
-        "Rectángulo GrabCut:",
-        rect.x,
-        rect.y,
-        rect.width,
-        rect.height
-      );
-
       // Verificar que el rectángulo esté dentro de los límites de la imagen
       if (
         rect.x < 0 ||
@@ -183,8 +155,6 @@ export default function ImageMask({ imageUrl, instanceId }) {
         );
       }
 
-      console.log("Aplicando algoritmo GrabCut...");
-
       // Aplicar algoritmo GrabCut
       cv.cvtColor(src, src, cv.COLOR_RGBA2RGB, 0);
 
@@ -196,10 +166,8 @@ export default function ImageMask({ imageUrl, instanceId }) {
       fgdModel.create(1, 65, cv.CV_64FC1);
       fgdModel.setTo(new cv.Scalar(0));
 
-      console.log("Ejecutando grabCut...");
+      // Ejecutar GrabCut
       cv.grabCut(src, mask, rect, bgdModel, fgdModel, 3, cv.GC_INIT_WITH_RECT);
-
-      console.log("GrabCut completado. Creando máscara de resultado...");
 
       // Crear máscara a partir de los resultados
       const maskData = new Uint8Array(mask.rows * mask.cols);
@@ -207,22 +175,21 @@ export default function ImageMask({ imageUrl, instanceId }) {
         for (let j = 0; j < mask.cols; j++) {
           const pixelValue = mask.ucharPtr(i, j)[0];
           if (pixelValue === cv.GC_FGD || pixelValue === cv.GC_PR_FGD) {
-            // Si es foreground probable o definitivo, marcarlo según el modo
             maskData[i * mask.cols + j] = 1;
           }
         }
       }
 
-      // Aplicar máscara al canvas
+      // Aplicar máscara al canvas - ya no necesitamos setTimeout aquí
       applyMask(maskData);
-
-      console.log("Procesamiento GrabCut completado exitosamente.");
-
-      // Habilitar modo multi-selección después de la primera máscara
-      setMultiSelectMode(true);
 
       // Restablecer estado de selección pero mantener la máscara visible
       resetSelectionOnly();
+
+      // La actualización de la vista previa ya se maneja en applyMask
+      setToolMessage(
+        "Selección aplicada. Puede continuar refinando la selección usando el modo + o -"
+      );
     } catch (error) {
       console.error("Error en operación GrabCut:", error);
       setErrorMessage(
@@ -231,26 +198,14 @@ export default function ImageMask({ imageUrl, instanceId }) {
         }`
       );
     } finally {
-      // Limpiar recursos si se crearon
-      try {
-        if (window.cv) {
-          if (src) src.delete();
-          if (mask) mask.delete();
-          if (bgdModel) bgdModel.delete();
-          if (fgdModel) fgdModel.delete();
-        }
-      } catch (e) {
-        console.error("Error durante la limpieza:", e);
+      // Limpiar recursos
+      if (window.cv) {
+        if (src) src.delete();
+        if (mask) mask.delete();
+        if (bgdModel) bgdModel.delete();
+        if (fgdModel) fgdModel.delete();
       }
     }
-
-    // Al finalizar, actualizar la vista previa y mensajes
-    setTimeout(updatePreview, 0);
-    setToolMessage(
-      multiSelectMode
-        ? "Puede continuar refinando la selección"
-        : "Selección aplicada. Utilice el botón + o - para agregar o quitar áreas"
-    );
   };
 
   // Función para actualizar la vista previa con la máscara aplicada
@@ -338,7 +293,7 @@ export default function ImageMask({ imageUrl, instanceId }) {
             existingMask.data[pos] = 0; // R
             existingMask.data[pos + 1] = 0; // G
             existingMask.data[pos + 2] = 0; // B
-            existingMask.data[pos + 3] = 0; // A (transparente - quitar de la máscara)
+            existingMask.data[pos + 3] = 0; // A (transparente)
           }
         }
       }
@@ -346,9 +301,57 @@ export default function ImageMask({ imageUrl, instanceId }) {
       maskCtx.putImageData(existingMask, 0, 0);
     }
 
+    // Actualizamos el estado y aplicamos la vista previa directamente
     setIsMaskApplied(true);
+
+    // Actualizar la vista previa inmediatamente sin setTimeout
+    updatePreviewDirectly(maskData);
+  };
+
+  // Nueva función para actualizar la vista previa directamente sin depender del estado
+  const updatePreviewDirectly = (maskData) => {
+    if (
+      !previewCanvasRef.current ||
+      !canvasRef.current ||
+      !maskCanvasRef.current
+    )
+      return;
+
+    const previewCtx = previewCanvasRef.current.getContext("2d");
+    const width = previewCanvasRef.current.width;
+    const height = previewCanvasRef.current.height;
+
+    // Volver a dibujar la imagen original en la vista previa
+    const originalCtx = canvasRef.current.getContext("2d");
+    const originalImage = originalCtx.getImageData(0, 0, width, height);
+    previewCtx.putImageData(originalImage, 0, 0);
+
+    // Obtener la máscara completa acumulada del canvas de máscara
+    const maskCtx = maskCanvasRef.current.getContext("2d");
+    const fullMaskImage = maskCtx.getImageData(0, 0, width, height);
+
+    // Obtener la vista previa para modificarla
+    const previewImage = previewCtx.getImageData(0, 0, width, height);
+
+    // Aplicar efectos visuales basados en la máscara completa
+    for (let i = 0; i < previewImage.data.length; i += 4) {
+      // Si el canal alfa de la máscara es mayor a 0, este píxel es parte de la máscara
+      if (fullMaskImage.data[i + 3] > 0) {
+        // Resaltar el objeto en la vista previa (tono azulado)
+        previewImage.data[i] *= 0.8; // R - reducir componente rojo
+        previewImage.data[i + 1] *= 0.8; // G - reducir componente verde
+        previewImage.data[i + 2] = Math.min(
+          255,
+          previewImage.data[i + 2] * 1.2
+        ); // B - aumentar componente azul
+      } else {
+        // Reducir la opacidad del fondo
+        previewImage.data[i + 3] = 100; // Alpha - semi transparente
+      }
+    }
+
     // Actualizar la vista previa
-    setTimeout(updatePreview, 0);
+    previewCtx.putImageData(previewImage, 0, 0);
   };
 
   // Implementación de Magic Wand
@@ -374,24 +377,13 @@ export default function ImageMask({ imageUrl, instanceId }) {
     const tolerance = 32; // Ajustar esto según necesidad para más/menos precisión
     floodFill(imageData, newMask, x, y, targetColor, tolerance);
 
-    // Aplicar la máscara según el modo actual
-    if (mode === MODES.SUBTRACT) {
-      // Invertir la máscara para modo SUBTRACT
-      for (let i = 0; i < newMask.length; i++) {
-        newMask[i] = newMask[i] ? 0 : 1;
-      }
-    }
-
     applyMask(newMask);
     setIsMaskApplied(true);
 
-    // Actualizar mensaje después de aplicar
+    // Actualizar mensaje
     setToolMessage(
       "Use el modo + o - para agregar o quitar áreas de la selección"
     );
-
-    // Actualizar la vista previa después de aplicar la máscara
-    setTimeout(updatePreview, 0);
   };
 
   // Algoritmo de floodFill para Magic Wand
@@ -400,6 +392,12 @@ export default function ImageMask({ imageUrl, instanceId }) {
     const width = imageData.width;
     const height = imageData.height;
     const processed = new Set(); // Para evitar procesar el mismo pixel dos veces
+    const directions = [
+      { dx: 1, dy: 0 }, // derecha
+      { dx: -1, dy: 0 }, // izquierda
+      { dx: 0, dy: 1 }, // abajo
+      { dx: 0, dy: -1 }, // arriba
+    ];
 
     while (stack.length > 0) {
       const current = stack.pop();
@@ -417,14 +415,6 @@ export default function ImageMask({ imageUrl, instanceId }) {
 
       if (colorMatch(targetColor, currentColor, tolerance)) {
         mask[current.y * width + current.x] = 1;
-
-        // Añadir vecinos a la pila
-        const directions = [
-          { dx: 1, dy: 0 }, // derecha
-          { dx: -1, dy: 0 }, // izquierda
-          { dx: 0, dy: 1 }, // abajo
-          { dx: 0, dy: -1 }, // arriba
-        ];
 
         for (const dir of directions) {
           const nx = current.x + dir.dx;
@@ -464,6 +454,7 @@ export default function ImageMask({ imageUrl, instanceId }) {
 
   // Resetear todo: selección y máscara
   const resetAll = () => {
+    // Limpiar la selección
     const selectionCtx = selectionRef.current.getContext("2d");
     selectionCtx.clearRect(
       0,
@@ -472,6 +463,7 @@ export default function ImageMask({ imageUrl, instanceId }) {
       selectionRef.current.height
     );
 
+    // Limpiar la máscara
     const maskCtx = maskCanvasRef.current.getContext("2d");
     maskCtx.clearRect(
       0,
@@ -493,12 +485,12 @@ export default function ImageMask({ imageUrl, instanceId }) {
       previewCtx.putImageData(origImage, 0, 0);
     }
 
+    // Resetear estados
     setHasSelection(false);
     setIsMaskApplied(false);
     setErrorMessage("");
-    setMultiSelectMode(false);
 
-    // Restablecer mensaje inicial
+    // Actualizar mensaje
     setToolMessage(
       selectedTool === TOOLS.GRABCUT
         ? "Dibuje un rectángulo alrededor del objeto que desea extraer"
@@ -526,11 +518,9 @@ export default function ImageMask({ imageUrl, instanceId }) {
     );
   };
 
+  // Manejo de eventos del mouse
   const handleMouseDown = (e) => {
-    // Si tenemos máscara aplicada y no estamos en modo multi-selección, no permitir nuevas selecciones
-    if (isMaskApplied && !multiSelectMode && selectedTool === TOOLS.GRABCUT)
-      return;
-
+    // Permitimos siempre hacer selecciones, incluso después de aplicar una máscara
     const rect = e.target.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -542,51 +532,37 @@ export default function ImageMask({ imageUrl, instanceId }) {
       setStartPoint({ x, y });
       setEndPoint({ x, y });
       setErrorMessage("");
-
-      // Limpiar selección previa
-      const selectionCtx = selectionRef.current.getContext("2d");
-      selectionCtx.clearRect(
-        0,
-        0,
-        selectionRef.current.width,
-        selectionRef.current.height
-      );
+      resetSelectionOnly();
     }
   };
 
   const handleMouseMove = (e) => {
-    if (isSelecting && selectedTool === TOOLS.GRABCUT) {
-      const rect = e.target.getBoundingClientRect();
-      const newEndPoint = {
-        x: Math.max(
-          0,
-          Math.min(e.clientX - rect.left, canvasRef.current.width)
-        ),
-        y: Math.max(
-          0,
-          Math.min(e.clientY - rect.top, canvasRef.current.height)
-        ),
-      };
-      setEndPoint(newEndPoint);
+    if (!isSelecting || selectedTool !== TOOLS.GRABCUT) return;
 
-      // Dibujar rectángulo de selección
-      const selectionCtx = selectionRef.current.getContext("2d");
-      selectionCtx.clearRect(
-        0,
-        0,
-        selectionRef.current.width,
-        selectionRef.current.height
-      );
-      selectionCtx.strokeStyle = "blue";
-      selectionCtx.lineWidth = 2;
-      selectionCtx.setLineDash([5, 5]);
-      selectionCtx.strokeRect(
-        startPoint.x,
-        startPoint.y,
-        newEndPoint.x - startPoint.x,
-        newEndPoint.y - startPoint.y
-      );
-    }
+    const rect = e.target.getBoundingClientRect();
+    const newEndPoint = {
+      x: Math.max(0, Math.min(e.clientX - rect.left, canvasRef.current.width)),
+      y: Math.max(0, Math.min(e.clientY - rect.top, canvasRef.current.height)),
+    };
+    setEndPoint(newEndPoint);
+
+    // Dibujar rectángulo de selección
+    const selectionCtx = selectionRef.current.getContext("2d");
+    selectionCtx.clearRect(
+      0,
+      0,
+      selectionRef.current.width,
+      selectionRef.current.height
+    );
+    selectionCtx.strokeStyle = "blue";
+    selectionCtx.lineWidth = 2;
+    selectionCtx.setLineDash([5, 5]);
+    selectionCtx.strokeRect(
+      startPoint.x,
+      startPoint.y,
+      newEndPoint.x - startPoint.x,
+      newEndPoint.y - startPoint.y
+    );
   };
 
   const handleMouseUp = () => {
@@ -749,7 +725,7 @@ export default function ImageMask({ imageUrl, instanceId }) {
                   zIndex: 1,
                   cursor:
                     selectedTool === TOOLS.GRABCUT
-                      ? isMaskApplied && !multiSelectMode
+                      ? isMaskApplied
                         ? "default"
                         : "crosshair"
                       : "pointer",
@@ -771,7 +747,7 @@ export default function ImageMask({ imageUrl, instanceId }) {
           </div>
         </div>
 
-        {/* Vista Previa - Panel Derecho */}
+        {/* Vista Previa */}
         <div className="relative bg-white rounded-lg shadow-md overflow-hidden">
           <div className="bg-gray-50 py-2 px-4 border-b">
             <h3 className="text-lg font-medium text-gray-700 text-center">
