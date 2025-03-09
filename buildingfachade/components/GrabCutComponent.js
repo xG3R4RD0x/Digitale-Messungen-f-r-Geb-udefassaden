@@ -277,7 +277,7 @@ export default function GrabCutComponent(props) {
     return maskData;
   };
 
-  // Apply mask to canvas
+  // Apply mask to canvas - Updated to match Magic Wand's consistency
   const applyMaskToCanvas = (maskData) => {
     const ctx = maskCanvasRef.current.getContext("2d");
     const imageData = ctx.getImageData(
@@ -294,14 +294,14 @@ export default function GrabCutComponent(props) {
 
       const pos = i * 4;
       if (isAddMode) {
-        // Add mode - Semi-transparent red color
+        // Add mode - Semi-transparent red color con valor fijo
         imageData.data[pos] = 255; // R
         imageData.data[pos + 1] = 0; // G
         imageData.data[pos + 2] = 0; // B
-        imageData.data[pos + 3] = 128; // A (semi-transparent)
+        imageData.data[pos + 3] = 150; // A (mismo valor que en Magic Wand)
       } else {
         // Subtract mode - Make transparent
-        imageData.data[pos + 3] = 0; // A (transparent)
+        imageData.data[pos + 3] = 0; // A (transparente)
       }
     }
 

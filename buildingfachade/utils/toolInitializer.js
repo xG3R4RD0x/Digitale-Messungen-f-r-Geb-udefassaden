@@ -1,4 +1,5 @@
 import GrabCutComponent from "../components/GrabCutComponent";
+import MagicWandComponent from "../components/MagicWandComponent";
 
 export const initGrabCutTool = (props) => {
   const {
@@ -38,6 +39,43 @@ export const initGrabCutTool = (props) => {
   return grabCutTool;
 };
 
+// Add this new function for Magic Wand tool
+export const initMagicWandTool = (props) => {
+  const {
+    canvasRef,
+    maskCanvasRef,
+    selectionRef,
+    registerToolButtons,
+    setErrorMessage,
+    resetSelectionOnly,
+    hasSelection,
+    setHasSelection,
+    setIsMaskApplied,
+    startPoint,
+    endPoint,
+    isOpenCVReady,
+    updatePreview,
+    mode,
+  } = props;
+
+  const magicWandTool = MagicWandComponent({
+    canvasRef,
+    maskCanvasRef,
+    selectionRef,
+    registerToolButtons,
+    setErrorMessage,
+    resetSelectionOnly,
+    hasSelection,
+    setHasSelection,
+    setIsMaskApplied,
+    isOpenCVReady,
+    updatePreview,
+    mode: mode?.toLowerCase(),
+  });
+
+  return magicWandTool;
+};
+
 export const initializeTool = (toolType, props) => {
   // Validate parameters
   if (!toolType || !props) return null;
@@ -51,7 +89,8 @@ export const initializeTool = (toolType, props) => {
   switch (toolType.toLowerCase()) {
     case "grabcut":
       return initGrabCutTool(props);
-    // More tools can be added here in the future
+    case "magic_wand":
+      return initMagicWandTool(props);
     default:
       console.warn(`Tool not implemented: ${toolType}`);
       return null;
