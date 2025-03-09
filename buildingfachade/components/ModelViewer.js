@@ -24,11 +24,11 @@ function Model({ objPath, mtlPath }) {
 
 function RotationControls({ cameraRef, modelRef, setSelectedView }) {
   const views = [
-    { position: [-30, 0, 0], up: [0, 1, 0], name: "Vista Derecha" },
-    { position: [30, 0, 0], up: [0, 1, 0], name: "Vista Izquierda" },
-    { position: [0, 0, 30], up: [0, 1, 0], name: "Vista Trasera" },
-    { position: [0, 0, -30], up: [0, 1, 0], name: "Vista Frontal" },
-    { position: [0, 30, 0], up: [0, 0, 1], name: "Vista Superior" },
+    { position: [-30, 0, 0], up: [0, 1, 0], name: "Right View" },
+    { position: [30, 0, 0], up: [0, 1, 0], name: "Left View" },
+    { position: [0, 0, 30], up: [0, 1, 0], name: "Rear View" },
+    { position: [0, 0, -30], up: [0, 1, 0], name: "Front View" },
+    { position: [0, 30, 0], up: [0, 0, 1], name: "Top View" },
   ];
 
   const rotateModel = (view) => {
@@ -69,7 +69,7 @@ function CaptureView({ gl, scene, camera, addImage }) {
 
   return (
     <button className="btn btn-green" onClick={() => capturarImagen()}>
-      Generar Imagen
+      Generate Image
     </button>
   );
 }
