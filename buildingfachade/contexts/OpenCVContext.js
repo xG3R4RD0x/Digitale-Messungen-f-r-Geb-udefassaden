@@ -1,35 +1,35 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
 
-// Crear el contexto
+// Create context
 export const OpenCVContext = createContext();
 
-// Proveedor de OpenCV
+// OpenCV Provider
 export function OpenCVProvider({ children }) {
   const [isOpenCVReady, setIsOpenCVReady] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    // Script ya está cargado y OpenCV está disponible
+    // Script is already loaded and OpenCV is available
     if (window.cv) {
-      console.log("OpenCV ya está cargado y disponible.");
+      console.log("OpenCV is already loaded and available.");
       setIsOpenCVReady(true);
       setIsLoading(false);
       return;
     }
 
-    // Script cargado pero OpenCV aún no está inicializado
+    // Script loaded but OpenCV not yet initialized
     const scriptTag = document.getElementById("opencv-script");
     if (scriptTag) {
       console.log(
-        "Script de OpenCV ya está cargando, esperando inicialización..."
+        "OpenCV script is already loading, waiting for initialization..."
       );
 
-      // Si el módulo ya tiene una función de inicialización pendiente, no la sobreescribamos
+      // If module already has a pending initialization function, don't overwrite it
       if (!window.Module || !window.Module.onRuntimeInitialized) {
         window.Module = window.Module || {};
         window.Module.onRuntimeInitialized = () => {
-          console.log("OpenCV runtime inicializado.");
+          console.log("OpenCV runtime initialized.");
           setIsOpenCVReady(true);
           setIsLoading(false);
         };
@@ -37,26 +37,26 @@ export function OpenCVProvider({ children }) {
       return;
     }
 
-    console.log("Cargando OpenCV.js...");
+    console.log("Loading OpenCV.js...");
     setIsLoading(true);
 
-    // Crear el script de OpenCV
+    // Create OpenCV script
     const script = document.createElement("script");
-    script.id = "opencv-script"; // ID único
+    script.id = "opencv-script"; // Unique ID
     script.src = "https://docs.opencv.org/4.5.0/opencv.js";
     script.async = true;
     script.onload = () => {
-      console.log("Script de OpenCV cargado.");
+      console.log("OpenCV script loaded.");
 
       if (window.cv) {
-        console.log("OpenCV disponible inmediatamente.");
+        console.log("OpenCV available immediately.");
         setIsOpenCVReady(true);
         setIsLoading(false);
       } else {
-        console.log("Configurando inicialización de OpenCV...");
+        console.log("Setting up OpenCV initialization...");
         window.Module = window.Module || {};
         window.Module.onRuntimeInitialized = () => {
-          console.log("OpenCV runtime inicializado.");
+          console.log("OpenCV runtime initialized.");
           setIsOpenCVReady(true);
           setIsLoading(false);
         };
@@ -64,8 +64,8 @@ export function OpenCVProvider({ children }) {
     };
 
     script.onerror = () => {
-      console.error("Error al cargar OpenCV.js");
-      setError("No se pudo cargar OpenCV.js");
+      console.error("Error loading OpenCV.js");
+      setError("Failed to load OpenCV.js");
       setIsLoading(false);
     };
 
@@ -73,8 +73,8 @@ export function OpenCVProvider({ children }) {
 
     // Cleanup
     return () => {
-      // No eliminamos el script para evitar múltiples cargas,
-      // pero podríamos limpiarlo si fuera necesario
+      // We don't remove the script to avoid multiple loads,
+      // but we could clean it up if necessary
     };
   }, []);
 
@@ -85,11 +85,11 @@ export function OpenCVProvider({ children }) {
   );
 }
 
-// Hook personalizado para usar OpenCV
+// Custom hook to use OpenCV
 export function useOpenCV() {
   const context = useContext(OpenCVContext);
   if (context === undefined) {
-    throw new Error("useOpenCV debe usarse dentro de un OpenCVProvider");
+    throw new Error("useOpenCV must be used within an OpenCVProvider");
   }
   return context;
 }
