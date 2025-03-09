@@ -1,68 +1,23 @@
-import { useEffect, useRef, useState } from "react";
-import { useOpenCV } from "../contexts/OpenCVContext";
+// Eliminamos el uso de useState y cualquier otro Hook
 
-export default function GrabCutComponent({ imageUrl }) {
-  const canvasRef = useRef(null);
-  const maskCanvasRef = useRef(null);
-  const selectionRef = useRef(null);
-  const [isSelecting, setIsSelecting] = useState(false);
-  const [startPoint, setStartPoint] = useState({ x: 0, y: 0 });
-  const [endPoint, setEndPoint] = useState({ x: 0, y: 0 });
-  const { isOpenCVReady } = useOpenCV();
-  const [imageDimensions, setImageDimensions] = useState({
-    width: 0,
-    height: 0,
-  });
-  const [hasSelection, setHasSelection] = useState(false);
-  const [isMaskApplied, setIsMaskApplied] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
-  // Track if we're in multi-selection mode
-  const [multiSelectMode, setMultiSelectMode] = useState(false);
-
-  // Load and display the image
-  useEffect(() => {
-    if (!imageUrl) return;
-
-    const image = new Image();
-    image.src = imageUrl;
-    image.onload = () => {
-      // Calculate dimensions maintaining the original aspect ratio
-      const maxWidth = Math.min(window.innerWidth * 0.8, 800);
-      const maxHeight = Math.min(window.innerHeight * 0.8, 600);
-
-      let width = image.width;
-      let height = image.height;
-
-      if (width > maxWidth || height > maxHeight) {
-        const scaleW = maxWidth / width;
-        const scaleH = maxHeight / height;
-        const scale = Math.min(scaleW, scaleH);
-
-        width *= scale;
-        height *= scale;
-      }
-
-      setImageDimensions({ width, height });
-
-      // Configure canvases
-      [canvasRef, maskCanvasRef, selectionRef].forEach((ref) => {
-        if (ref.current) {
-          ref.current.width = width;
-          ref.current.height = height;
-          if (ref === canvasRef) {
-            const ctx = ref.current.getContext("2d");
-            ctx.drawImage(image, 0, 0, width, height);
-          }
-        }
-      });
-
-      // Reset state for new image
-      setHasSelection(false);
-      setIsMaskApplied(false);
-      setErrorMessage("");
-    };
-  }, [imageUrl]);
-
+// GrabCut tool module to be used with ImageMask container
+export default function GrabCutComponent({
+  canvasRef,
+  maskCanvasRef,
+  selectionRef,
+  registerToolButtons,
+  setErrorMessage,
+  resetSelectionOnly,
+  hasSelection,
+  setHasSelection,
+  setIsMaskApplied,
+  startPoint,
+  endPoint,
+  isOpenCVReady,
+  updatePreview,
+  mode,
+}) {
+  // Process the selection with GrabCut algorithm
   const handleGrabCut = () => {
     setErrorMessage("");
 
@@ -75,6 +30,8 @@ export default function GrabCutComponent({ imageUrl }) {
       setErrorMessage("OpenCV library not found. Try refreshing the page.");
       return;
     }
+
+    let src, mask, bgdModel, fgdModel;
 
     try {
       console.log("Starting GrabCut operation...");
@@ -92,7 +49,7 @@ export default function GrabCutComponent({ imageUrl }) {
       }
 
       console.log("Reading image from canvas...");
-      const src = cv.imread(canvasRef.current);
+      src = cv.imread(canvasRef.current);
 
       if (!src || src.empty()) {
         throw new Error("Failed to read image from canvas.");
@@ -105,9 +62,9 @@ export default function GrabCutComponent({ imageUrl }) {
       );
 
       // Create mask and models
-      const mask = new cv.Mat();
-      const bgdModel = new cv.Mat();
-      const fgdModel = new cv.Mat();
+      mask = new cv.Mat();
+      bgdModel = new cv.Mat();
+      fgdModel = new cv.Mat();
 
       // Create rectangle
       const rect = new cv.Rect(
@@ -163,16 +120,21 @@ export default function GrabCutComponent({ imageUrl }) {
         }
       }
 
-      // Apply mask to canvas (preserving existing masks)
+      // Apply mask to canvas
       applyMask(maskData);
 
       console.log("GrabCut processing completed successfully.");
 
-      // Enable multi-select mode after first successful mask
-      setMultiSelectMode(true);
-
       // Reset selection state but keep mask visible
       resetSelectionOnly();
+
+      // Forzar actualización de la vista previa con flag para indicar que es la primera aplicación
+      if (updatePreview) {
+        // Esperamos a que se complete la actualización de la máscara antes de actualizar la vista previa
+        setTimeout(() => {
+          updatePreview(true); // Pasar true para indicar que acaba de aplicarse una máscara
+        }, 0);
+      }
     } catch (error) {
       console.error("Error in GrabCut operation:", error);
       setErrorMessage(
@@ -185,12 +147,10 @@ export default function GrabCutComponent({ imageUrl }) {
       // Clean up resources if they were created
       try {
         if (window.cv) {
-          const cv = window.cv;
-          // Only cleanup if these objects were successfully created
-          if (typeof src !== "undefined") src.delete();
-          if (typeof mask !== "undefined") mask.delete();
-          if (typeof bgdModel !== "undefined") bgdModel.delete();
-          if (typeof fgdModel !== "undefined") fgdModel.delete();
+          if (src) src.delete();
+          if (mask) mask.delete();
+          if (bgdModel) bgdModel.delete();
+          if (fgdModel) fgdModel.delete();
         }
       } catch (e) {
         console.error("Error during cleanup:", e);
@@ -198,79 +158,44 @@ export default function GrabCutComponent({ imageUrl }) {
     }
   };
 
-  // Apply mask to canvas while preserving existing masks
+  // Apply mask to canvas using the current mode (add/subtract)
   const applyMask = (maskData) => {
     const maskCtx = maskCanvasRef.current.getContext("2d");
 
-    // If this is the first mask, create a new ImageData
-    if (!isMaskApplied) {
-      const imageData = maskCtx.createImageData(
-        maskCanvasRef.current.width,
-        maskCanvasRef.current.height
-      );
+    // Obtener la imagen de datos actual para trabajar con ella
+    const currentImageData = maskCtx.getImageData(
+      0,
+      0,
+      maskCanvasRef.current.width,
+      maskCanvasRef.current.height
+    );
 
-      for (let i = 0; i < maskData.length; i++) {
-        const pos = i * 4;
-        if (maskData[i]) {
-          imageData.data[pos] = 255; // R
-          imageData.data[pos + 1] = 0; // G
-          imageData.data[pos + 2] = 0; // B
-          imageData.data[pos + 3] = 128; // A (semi-transparent)
-        }
+    for (let i = 0; i < maskData.length; i++) {
+      const pos = i * 4;
+
+      // Si estamos en modo ADD o no hay modo especificado y el pixel está seleccionado
+      if ((mode === "add" || !mode) && maskData[i]) {
+        currentImageData.data[pos] = 255; // R
+        currentImageData.data[pos + 1] = 0; // G
+        currentImageData.data[pos + 2] = 0; // B
+        currentImageData.data[pos + 3] = 128; // A (semi-transparente)
       }
-
-      maskCtx.putImageData(imageData, 0, 0);
-    } else {
-      // For subsequent masks, get the existing mask and merge
-      const existingMask = maskCtx.getImageData(
-        0,
-        0,
-        maskCanvasRef.current.width,
-        maskCanvasRef.current.height
-      );
-
-      for (let i = 0; i < maskData.length; i++) {
-        const pos = i * 4;
-        if (maskData[i]) {
-          existingMask.data[pos] = 255; // R
-          existingMask.data[pos + 1] = 0; // G
-          existingMask.data[pos + 2] = 0; // B
-          existingMask.data[pos + 3] = 128; // A (semi-transparent)
-        }
+      // Si estamos en modo SUBTRACT y el pixel está seleccionado, lo hacemos transparente
+      else if (mode === "subtract" && maskData[i]) {
+        currentImageData.data[pos + 3] = 0; // A (transparente)
       }
-
-      maskCtx.putImageData(existingMask, 0, 0);
     }
 
+    maskCtx.putImageData(currentImageData, 0, 0);
     setIsMaskApplied(true);
   };
 
-  // Reset only the selection, not the mask
-  const resetSelectionOnly = () => {
-    // Clear selection rectangle
-    const selectionCtx = selectionRef.current.getContext("2d");
-    selectionCtx.clearRect(
-      0,
-      0,
-      selectionRef.current.width,
-      selectionRef.current.height
-    );
-
-    // Reset selection state
-    setHasSelection(false);
-  };
-
+  // Event handlers for mouse interaction
   const handleMouseDown = (e) => {
-    // Allow new selections even if mask is applied when in multi-select mode
-    if (isMaskApplied && !multiSelectMode) return;
-
-    setIsSelecting(true);
+    // Siempre permitir selecciones, incluso si ya hay una máscara
     const rect = e.target.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    setStartPoint({ x, y });
-    setEndPoint({ x, y });
-    setErrorMessage("");
 
     // Clear previous selection
     const selectionCtx = selectionRef.current.getContext("2d");
@@ -280,9 +205,11 @@ export default function GrabCutComponent({ imageUrl }) {
       selectionRef.current.width,
       selectionRef.current.height
     );
+
+    return { x, y };
   };
 
-  const handleMouseMove = (e) => {
+  const handleMouseMove = (e, isSelecting, startPoint) => {
     if (isSelecting) {
       const rect = e.target.getBoundingClientRect();
       const newEndPoint = {
@@ -295,7 +222,6 @@ export default function GrabCutComponent({ imageUrl }) {
           Math.min(e.clientY - rect.top, canvasRef.current.height)
         ),
       };
-      setEndPoint(newEndPoint);
 
       // Draw selection rectangle
       const selectionCtx = selectionRef.current.getContext("2d");
@@ -314,18 +240,20 @@ export default function GrabCutComponent({ imageUrl }) {
         newEndPoint.x - startPoint.x,
         newEndPoint.y - startPoint.y
       );
+
+      return newEndPoint;
     }
+    return null;
   };
 
-  const handleMouseUp = () => {
-    setIsSelecting(false);
-
+  const handleMouseUp = (endPoint, startPoint) => {
     // Check if selection is valid
     const selectionWidth = Math.abs(endPoint.x - startPoint.x);
     const selectionHeight = Math.abs(endPoint.y - startPoint.y);
 
     if (selectionWidth > 20 && selectionHeight > 20) {
       setHasSelection(true);
+      return true;
     } else {
       setErrorMessage(
         "Selection too small. Please draw a larger rectangle (at least 20x20 pixels)."
@@ -338,114 +266,45 @@ export default function GrabCutComponent({ imageUrl }) {
         selectionRef.current.width,
         selectionRef.current.height
       );
+      return false;
     }
   };
 
-  const resetSelection = () => {
-    // Clear selection and mask
-    const selectionCtx = selectionRef.current.getContext("2d");
-    selectionCtx.clearRect(
-      0,
-      0,
-      selectionRef.current.width,
-      selectionRef.current.height
-    );
-
-    const maskCtx = maskCanvasRef.current.getContext("2d");
-    maskCtx.clearRect(
-      0,
-      0,
-      maskCanvasRef.current.width,
-      maskCanvasRef.current.height
-    );
-
-    setHasSelection(false);
-    setIsMaskApplied(false);
-    setErrorMessage("");
-    setMultiSelectMode(false);
+  // Register contextual button for GrabCut application
+  const registerButtons = () => {
+    if (hasSelection) {
+      registerToolButtons([
+        {
+          label: "Apply GrabCut",
+          icon: "✓",
+          title: "Apply GrabCut to the selection",
+          className: "bg-purple-500 text-white ml-auto",
+          onClick: handleGrabCut,
+        },
+      ]);
+    } else {
+      registerToolButtons([]);
+    }
   };
 
-  return (
-    <div className="flex flex-col items-center">
-      <div
-        className="relative"
-        style={{ width: imageDimensions.width, height: imageDimensions.height }}
-      >
-        {!isOpenCVReady && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-200 bg-opacity-75 z-50">
-            <p className="text-gray-800 font-medium">Loading OpenCV.js...</p>
-          </div>
-        )}
+  // Define preferred cursor - Modificamos la lógica para permitir selecciones múltiples
+  const cursor = "crosshair"; // Siempre usar crosshair para permitir selecciones múltiples
 
-        {/* Base canvas for the image */}
-        <canvas
-          ref={canvasRef}
-          className="absolute top-0 left-0 z-10"
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          style={{
-            cursor: isMaskApplied && !multiSelectMode ? "default" : "crosshair",
-          }}
-        />
+  // Initialize tool when selected
+  const initTool = () => {
+    registerButtons();
+    return {
+      handleMouseDown,
+      handleMouseMove,
+      handleMouseUp,
+      cursor,
+    };
+  };
 
-        {/* Canvas for the selection rectangle */}
-        <canvas
-          ref={selectionRef}
-          className="absolute top-0 left-0 pointer-events-none z-20"
-        />
-
-        {/* Canvas for the mask */}
-        <canvas
-          ref={maskCanvasRef}
-          className="absolute top-0 left-0 pointer-events-none z-30"
-        />
-      </div>
-
-      {errorMessage && (
-        <div className="mt-3 p-2 bg-red-100 border border-red-300 text-red-700 rounded">
-          {errorMessage}
-        </div>
-      )}
-
-      <div className="mt-4 flex space-x-4">
-        <button
-          className="btn btn-blue"
-          onClick={handleGrabCut}
-          disabled={!hasSelection || !isOpenCVReady}
-        >
-          Apply GrabCut
-        </button>
-
-        <button
-          className="btn btn-green"
-          onClick={resetSelection}
-          disabled={!hasSelection && !isMaskApplied && !errorMessage}
-        >
-          Reset All
-        </button>
-      </div>
-
-      <div className="mt-4 text-sm text-gray-600">
-        {!hasSelection && !isMaskApplied && !errorMessage && (
-          <p>Draw a rectangle around the object you want to extract</p>
-        )}
-        {hasSelection && !errorMessage && (
-          <p>Click "Apply GrabCut" to segment the selected area</p>
-        )}
-        {isMaskApplied && multiSelectMode && !hasSelection && !errorMessage && (
-          <p>
-            Draw another rectangle to add to the mask, or click Reset All to
-            start over
-          </p>
-        )}
-      </div>
-
-      {isOpenCVReady && (
-        <div className="mt-4 text-xs text-gray-500">
-          <p>OpenCV.js is loaded and ready to use.</p>
-        </div>
-      )}
-    </div>
-  );
+  return {
+    initTool,
+    handleGrabCut,
+    registerButtons,
+    cursor,
+  };
 }

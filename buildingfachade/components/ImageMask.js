@@ -1,325 +1,397 @@
 import { useEffect, useRef, useState } from "react";
 import { useOpenCV } from "../contexts/OpenCVContext";
+import { initializeTool, getToolCursor } from "../utils/toolInitializer";
 
-const TOOLS = {
-  GRABCUT: "grabcut",
-  MAGIC_WAND: "magic_wand",
-};
-
-const MODES = {
-  ADD: "add",
-  SUBTRACT: "subtract",
-};
+// Constantes
+const TOOLS = { GRABCUT: "grabcut", MAGIC_WAND: "magic_wand" };
+const MODES = { ADD: "add", SUBTRACT: "subtract" };
 
 export default function ImageMask({ imageUrl, instanceId }) {
-  // Referencias a canvas
-  const canvasRef = useRef(null);
-  const maskCanvasRef = useRef(null);
-  const selectionRef = useRef(null);
-  const previewCanvasRef = useRef(null);
+  // Referencias a elementos DOM y canvas
+  const canvasRefs = {
+    main: useRef(null), // Canvas original
+    mask: useRef(null), // Canvas para máscara
+    selection: useRef(null), // Canvas para selección temporal
+    preview: useRef(null), // Canvas para vista previa
+  };
 
-  // Estados
-  const [selectedTool, setSelectedTool] = useState(TOOLS.GRABCUT);
-  const [mode, setMode] = useState(MODES.ADD);
-  const [isSelecting, setIsSelecting] = useState(false);
-  const [startPoint, setStartPoint] = useState({ x: 0, y: 0 });
-  const [endPoint, setEndPoint] = useState({ x: 0, y: 0 });
+  const overlayRef = useRef(null); // Referencia al overlay
+
+  // Estado central de la aplicación
   const { isOpenCVReady } = useOpenCV();
-  const [imageDimensions, setImageDimensions] = useState({
-    width: 0,
-    height: 0,
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const [tool, setTool] = useState(TOOLS.GRABCUT);
+  const [mode, setMode] = useState(MODES.ADD);
+  const [cursor, setCursor] = useState("default");
+
+  // Estado de selección y máscara
+  const [selection, setSelection] = useState({
+    active: false, // Si hay selección activa
+    isSelecting: false, // Si está en proceso de selección
+    start: { x: 0, y: 0 }, // Punto inicio
+    end: { x: 0, y: 0 }, // Punto final
   });
-  const [hasSelection, setHasSelection] = useState(false);
-  const [isMaskApplied, setIsMaskApplied] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [toolMessage, setToolMessage] = useState("");
 
-  // Nuevo estado para botones contextuales
-  const [contextualButtons, setContextualButtons] = useState([]);
+  const [hasMask, setHasMask] = useState(false); // Si hay máscara aplicada
+  const [maskData, setMaskData] = useState(null); // Datos de la máscara para persistencia
 
-  // Cargar y mostrar la imagen
+  // Estados UI
+  const [error, setError] = useState("");
+  const [buttons, setButtons] = useState([]);
+  const [activeTool, setActiveTool] = useState(null);
+
+  // ========== INICIALIZACIÓN Y CARGA ==========
+
+  // Cargar imagen
   useEffect(() => {
     if (!imageUrl) return;
 
     const image = new Image();
     image.src = imageUrl;
     image.onload = () => {
-      // Calcular dimensiones manteniendo el ratio de aspecto original
+      // Calcular dimensiones manteniendo proporción
       const maxWidth = window.innerWidth * 0.35;
       const maxHeight = window.innerHeight * 0.7;
 
-      let width = image.width;
-      let height = image.height;
-
-      // Escalar si la imagen es demasiado grande
+      let { width, height } = image;
       if (width > maxWidth || height > maxHeight) {
-        const scaleW = maxWidth / width;
-        const scaleH = maxHeight / height;
-        const scale = Math.min(scaleW, scaleH);
-
+        const scale = Math.min(maxWidth / width, maxHeight / height);
         width *= scale;
         height *= scale;
       }
 
-      setImageDimensions({ width, height });
+      // Actualizar dimensiones
+      setDimensions({ width, height });
 
-      // Configurar todos los canvases con exactamente las mismas dimensiones
-      [canvasRef, maskCanvasRef, selectionRef, previewCanvasRef].forEach(
-        (ref) => {
-          if (ref.current) {
-            ref.current.width = width;
-            ref.current.height = height;
-            if (ref === canvasRef || ref === previewCanvasRef) {
-              const ctx = ref.current.getContext("2d");
-              ctx.drawImage(image, 0, 0, width, height);
-            }
+      // Inicializar todos los canvas
+      Object.values(canvasRefs).forEach((ref) => {
+        if (ref.current) {
+          ref.current.width = width;
+          ref.current.height = height;
+
+          // Dibujar la imagen en el canvas principal y de vista previa
+          if (ref === canvasRefs.main || ref === canvasRefs.preview) {
+            const ctx = ref.current.getContext("2d");
+            ctx.drawImage(image, 0, 0, width, height);
           }
         }
-      );
+      });
 
-      // Resetear estados para la nueva imagen
-      setHasSelection(false);
-      setIsMaskApplied(false);
-      setErrorMessage("");
-
-      // Establecer mensaje inicial de ayuda
-      setToolMessage(
-        selectedTool === TOOLS.GRABCUT
-          ? "Dibuje un rectángulo alrededor del objeto que desea extraer"
-          : "Haga clic en un área para seleccionar regiones de color similar"
-      );
+      // Reset estados
+      resetState(false);
     };
-  }, [imageUrl, selectedTool]);
+  }, [imageUrl]);
 
-  // Actualizar mensaje de ayuda cuando cambia la herramienta
+  // Inicializar herramienta cuando cambia la selección o OpenCV
   useEffect(() => {
-    if (!isMaskApplied) {
-      setToolMessage(
-        selectedTool === TOOLS.GRABCUT
-          ? "Dibuje un rectángulo alrededor del objeto que desea extraer"
-          : "Haga clic en un área para seleccionar regiones de color similar"
+    if (tool && isOpenCVReady) {
+      // Limpiar botones anteriores
+      setButtons([]);
+
+      const toolInterface = initializeTool(tool, {
+        canvasRef: canvasRefs.main,
+        maskCanvasRef: canvasRefs.mask,
+        selectionRef: canvasRefs.selection,
+        registerToolButtons: setButtons,
+        setErrorMessage: setError,
+        resetSelectionOnly,
+        hasSelection: selection.active,
+        setHasSelection: (active) =>
+          setSelection((prev) => ({ ...prev, active })),
+        setIsMaskApplied: setHasMask,
+        startPoint: selection.start,
+        endPoint: selection.end,
+        isOpenCVReady,
+        updatePreview: applyMaskToPreview,
+        mode,
+      });
+
+      if (toolInterface) {
+        const tool = toolInterface.initTool();
+        setActiveTool(tool);
+        setCursor(tool?.cursor || "crosshair");
+      }
+    }
+  }, [tool, mode, isOpenCVReady]);
+
+  // Actualizar botones al cambiar la selección
+  useEffect(() => {
+    if (selection.active && activeTool) {
+      const toolProps = {
+        canvasRef: canvasRefs.main,
+        maskCanvasRef: canvasRefs.mask,
+        selectionRef: canvasRefs.selection,
+        registerToolButtons: setButtons,
+        setErrorMessage: setError,
+        resetSelectionOnly,
+        hasSelection: selection.active,
+        setHasSelection: (active) =>
+          setSelection((prev) => ({ ...prev, active })),
+        setIsMaskApplied: setHasMask,
+        startPoint: selection.start,
+        endPoint: selection.end,
+        isOpenCVReady,
+        updatePreview: applyMaskToPreview,
+        mode,
+      };
+
+      const toolInstance = initializeTool(tool, toolProps);
+      if (toolInstance) toolInstance.registerButtons();
+    }
+  }, [selection.active]);
+
+  // Actualizar visibilidad del overlay cuando cambia hasMask
+  useEffect(() => {
+    if (overlayRef.current) {
+      overlayRef.current.style.display = hasMask ? "none" : "flex";
+    }
+
+    // Si tenemos máscara, actualizar vista previa
+    if (hasMask && canvasRefs.mask.current && !selection.isSelecting) {
+      const ctx = canvasRefs.mask.current.getContext("2d");
+      const mask = ctx.getImageData(
+        0,
+        0,
+        canvasRefs.mask.current.width,
+        canvasRefs.mask.current.height
       );
+
+      // Guardar datos de máscara para persistencia
+      setMaskData(mask);
+
+      // Aplicar a vista previa
+      applyMaskToPreview(true);
     }
-  }, [selectedTool, isMaskApplied]);
+  }, [hasMask]);
 
-  // Función para actualizar la vista previa con la máscara aplicada
-  const updatePreview = () => {
-    if (!previewCanvasRef.current) return;
+  // ========== FUNCIONES DE MÁSCARA Y VISTA PREVIA ==========
 
-    const previewCtx = previewCanvasRef.current.getContext("2d");
-    const width = previewCanvasRef.current.width;
-    const height = previewCanvasRef.current.height;
+  // Aplicar máscara a la vista previa
+  function applyMaskToPreview(force = false) {
+    const { main, mask, preview } = canvasRefs;
+    if (!preview.current || !mask.current || !main.current) return;
 
-    // Volver a dibujar la imagen original
-    if (canvasRef.current) {
-      const originalCtx = canvasRef.current.getContext("2d");
-      const originalImage = originalCtx.getImageData(0, 0, width, height);
-      previewCtx.putImageData(originalImage, 0, 0);
-    }
+    const previewCtx = preview.current.getContext("2d");
+    const width = preview.current.width;
+    const height = preview.current.height;
 
-    if (isMaskApplied && maskCanvasRef.current) {
-      // Obtener la máscara
-      const maskCtx = maskCanvasRef.current.getContext("2d");
-      const maskImage = maskCtx.getImageData(0, 0, width, height);
+    // Dibujar imagen original
+    const originalCtx = main.current.getContext("2d");
+    const originalImage = originalCtx.getImageData(0, 0, width, height);
+    previewCtx.putImageData(originalImage, 0, 0);
 
-      // Aplicar la máscara a la vista previa
+    // Obtener máscara actual
+    const maskCtx = mask.current.getContext("2d");
+    const maskImage = maskCtx.getImageData(0, 0, width, height);
+
+    // Verificar si hay máscara
+    let pixelsFound = false;
+
+    if (hasMask || force) {
+      // Aplicar efectos
       const previewImage = previewCtx.getImageData(0, 0, width, height);
 
       for (let i = 0; i < previewImage.data.length; i += 4) {
-        // Si el alfa es mayor a 0, este píxel es parte de la máscara
         if (maskImage.data[i + 3] > 0) {
-          // Resaltar el objeto en la vista previa (tono azulado)
-          previewImage.data[i] *= 0.8; // R - reducir componente rojo
-          previewImage.data[i + 1] *= 0.8; // G - reducir componente verde
+          pixelsFound = true;
+
+          // Efecto visual - azulado para objeto seleccionado
+          previewImage.data[i] *= 0.8; // R
+          previewImage.data[i + 1] *= 0.8; // G
           previewImage.data[i + 2] = Math.min(
             255,
             previewImage.data[i + 2] * 1.2
-          ); // B - aumentar componente azul
+          ); // B
         } else {
-          // Reducir la opacidad del fondo
-          previewImage.data[i + 3] = 100; // Alpha - semi transparente
+          // Semi-transparencia para fondo
+          previewImage.data[i + 3] = 100; // Alpha
         }
       }
 
       previewCtx.putImageData(previewImage, 0, 0);
-    }
-  };
 
-  // Nueva función para actualizar la vista previa directamente sin depender del estado
-  const updatePreviewDirectly = (maskData) => {
-    if (
-      !previewCanvasRef.current ||
-      !canvasRef.current ||
-      !maskCanvasRef.current
-    )
-      return;
+      // Actualizar estado si es necesario
+      if (pixelsFound !== hasMask) {
+        setHasMask(pixelsFound);
+      }
 
-    const previewCtx = previewCanvasRef.current.getContext("2d");
-    const width = previewCanvasRef.current.width;
-    const height = previewCanvasRef.current.height;
-
-    // Volver a dibujar la imagen original en la vista previa
-    const originalCtx = canvasRef.current.getContext("2d");
-    const originalImage = originalCtx.getImageData(0, 0, width, height);
-    previewCtx.putImageData(originalImage, 0, 0);
-
-    // Obtener la máscara completa acumulada del canvas de máscara
-    const maskCtx = maskCanvasRef.current.getContext("2d");
-    const fullMaskImage = maskCtx.getImageData(0, 0, width, height);
-
-    // Obtener la vista previa para modificarla
-    const previewImage = previewCtx.getImageData(0, 0, width, height);
-
-    // Aplicar efectos visuales basados en la máscara completa
-    for (let i = 0; i < previewImage.data.length; i += 4) {
-      // Si el canal alfa de la máscara es mayor a 0, este píxel es parte de la máscara
-      if (fullMaskImage.data[i + 3] > 0) {
-        // Resaltar el objeto en la vista previa (tono azulado)
-        previewImage.data[i] *= 0.8; // R - reducir componente rojo
-        previewImage.data[i + 1] *= 0.8; // G - reducir componente verde
-        previewImage.data[i + 2] = Math.min(
-          255,
-          previewImage.data[i + 2] * 1.2
-        ); // B - aumentar componente azul
-      } else {
-        // Reducir la opacidad del fondo
-        previewImage.data[i + 3] = 100; // Alpha - semi transparente
+      // Actualizar el overlay
+      if (overlayRef.current) {
+        overlayRef.current.style.display = pixelsFound ? "none" : "flex";
       }
     }
+  }
 
-    // Actualizar la vista previa
-    previewCtx.putImageData(previewImage, 0, 0);
+  // Restaurar máscara guardada cuando se cambia de herramienta
+  useEffect(() => {
+    if (maskData && canvasRefs.mask.current && hasMask) {
+      const maskCtx = canvasRefs.mask.current.getContext("2d");
+      maskCtx.putImageData(maskData, 0, 0);
+
+      // Forzar actualización de vista previa
+      setTimeout(() => applyMaskToPreview(true), 0);
+
+      // Ocultar overlay
+      if (overlayRef.current) {
+        overlayRef.current.style.display = "none";
+      }
+    }
+  }, [tool, maskData]);
+
+  // ========== MANEJADORES DE EVENTOS ==========
+
+  // Cambio de herramienta
+  const changeTool = (newTool) => {
+    if (tool === newTool) return;
+
+    // Limpiar selección pero mantener máscara
+    resetSelectionOnly();
+    setTool(newTool);
+
+    // Forzar a que se mantengan los estados de máscara
+    if (hasMask && overlayRef.current) {
+      overlayRef.current.style.display = "none";
+    }
   };
 
-  // Resetear solo la selección, no la máscara
+  // Cambio de modo
+  const toggleMode = () => {
+    setMode(mode === MODES.ADD ? MODES.SUBTRACT : MODES.ADD);
+  };
+
+  // Reset solo selección
   const resetSelectionOnly = () => {
-    const selectionCtx = selectionRef.current.getContext("2d");
-    selectionCtx.clearRect(
-      0,
-      0,
-      selectionRef.current.width,
-      selectionRef.current.height
-    );
-    setHasSelection(false);
+    if (canvasRefs.selection.current) {
+      const ctx = canvasRefs.selection.current.getContext("2d");
+      ctx.clearRect(0, 0, dimensions.width, dimensions.height);
+
+      setSelection({
+        active: false,
+        isSelecting: false,
+        start: { x: 0, y: 0 },
+        end: { x: 0, y: 0 },
+      });
+    }
   };
 
-  // Resetear todo: selección y máscara
+  // Reset completo
   const resetAll = () => {
-    // Limpiar la selección
-    const selectionCtx = selectionRef.current.getContext("2d");
-    selectionCtx.clearRect(
-      0,
-      0,
-      selectionRef.current.width,
-      selectionRef.current.height
-    );
+    // Limpiar canvas
+    [canvasRefs.selection, canvasRefs.mask].forEach((ref) => {
+      if (ref.current) {
+        const ctx = ref.current.getContext("2d");
+        ctx.clearRect(0, 0, dimensions.width, dimensions.height);
+      }
+    });
 
-    // Limpiar la máscara
-    const maskCtx = maskCanvasRef.current.getContext("2d");
-    maskCtx.clearRect(
-      0,
-      0,
-      maskCanvasRef.current.width,
-      maskCanvasRef.current.height
-    );
-
-    // Restaurar la vista previa original
-    if (previewCanvasRef.current && canvasRef.current) {
-      const origCtx = canvasRef.current.getContext("2d");
-      const previewCtx = previewCanvasRef.current.getContext("2d");
-      const origImage = origCtx.getImageData(
+    // Restaurar imagen original en vista previa
+    if (canvasRefs.preview.current && canvasRefs.main.current) {
+      const mainCtx = canvasRefs.main.current.getContext("2d");
+      const previewCtx = canvasRefs.preview.current.getContext("2d");
+      const image = mainCtx.getImageData(
         0,
         0,
-        canvasRef.current.width,
-        canvasRef.current.height
+        dimensions.width,
+        dimensions.height
       );
-      previewCtx.putImageData(origImage, 0, 0);
+      previewCtx.putImageData(image, 0, 0);
     }
 
-    // Resetear estados
-    setHasSelection(false);
-    setIsMaskApplied(false);
-    setErrorMessage("");
-
-    // Actualizar mensaje
-    setToolMessage(
-      selectedTool === TOOLS.GRABCUT
-        ? "Dibuje un rectángulo alrededor del objeto que desea extraer"
-        : "Haga clic en un área para seleccionar regiones de color similar"
-    );
+    // Reset estados
+    resetState(false);
   };
 
-  // Manejar cambio de herramienta
-  const handleToolChange = (tool) => {
-    setSelectedTool(tool);
-    // Actualizar mensaje de ayuda
-    setToolMessage(
-      tool === TOOLS.GRABCUT
-        ? "Dibuje un rectángulo alrededor del objeto que desea extraer"
-        : "Haga clic en un área para seleccionar regiones de color similar"
-    );
+  // Inicializar/resetear estados
+  const resetState = (preserveMask = false) => {
+    if (!preserveMask) {
+      setHasMask(false);
+      setMaskData(null);
+    }
+
+    setSelection({
+      active: false,
+      isSelecting: false,
+      start: { x: 0, y: 0 },
+      end: { x: 0, y: 0 },
+    });
+
+    setError("");
+    setButtons([]);
   };
 
-  // Manejar cambio de modo
-  const handleModeChange = () => {
-    const newMode = mode === MODES.ADD ? MODES.SUBTRACT : MODES.ADD;
-    setMode(newMode);
-    setToolMessage(
-      `Modo cambiado a: ${newMode === MODES.ADD ? "Agregar" : "Quitar"} áreas`
-    );
-  };
+  // ========== MANEJADORES DE MOUSE ==========
 
-  // Stub versions of mouse handlers
   const handleMouseDown = (e) => {
-    // Removed implementation
-    setErrorMessage("");
+    setError("");
+
+    if (activeTool?.handleMouseDown) {
+      const point = activeTool.handleMouseDown(e);
+      if (point) {
+        setSelection((prev) => ({
+          ...prev,
+          isSelecting: true,
+          start: point,
+          end: point,
+        }));
+      }
+    }
   };
 
   const handleMouseMove = (e) => {
-    // Removed implementation
+    if (selection.isSelecting && activeTool?.handleMouseMove) {
+      const newEnd = activeTool.handleMouseMove(e, true, selection.start);
+      if (newEnd) {
+        setSelection((prev) => ({
+          ...prev,
+          end: newEnd,
+        }));
+      }
+    }
   };
 
   const handleMouseUp = () => {
-    // Removed implementation
+    if (selection.isSelecting && activeTool?.handleMouseUp) {
+      const valid = activeTool.handleMouseUp(selection.end, selection.start);
+
+      setSelection((prev) => ({
+        ...prev,
+        isSelecting: false,
+        active: valid,
+      }));
+    }
   };
 
-  // Función para registrar botones contextuales desde herramientas
-  const registerToolButtons = (buttons) => {
-    setContextualButtons(buttons);
-  };
+  // ========== RENDERIZADO ==========
 
   return (
     <div className="w-full flex flex-col items-center p-4">
-      {errorMessage && (
+      {/* Mensaje de error */}
+      {error && (
         <div className="mb-4 bg-red-100 border border-red-300 text-red-700 px-4 py-3 rounded">
-          {errorMessage}
+          {error}
         </div>
       )}
 
-      {/* Mensajes de ayuda */}
-      <div className="w-full max-w-6xl mb-4">
-        <p className="text-sm text-gray-600 bg-blue-50 border border-blue-200 rounded-md p-2">
-          {toolMessage}
-        </p>
-        {!isOpenCVReady && (
-          <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-md text-sm text-yellow-700">
-            Cargando OpenCV.js... Por favor, espere.
-          </div>
-        )}
-      </div>
+      {/* Indicador de carga OpenCV */}
+      {!isOpenCVReady && (
+        <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-md text-sm text-yellow-700">
+          Cargando OpenCV.js... Por favor, espere.
+        </div>
+      )}
 
       <div className="w-full max-w-6xl flex flex-wrap justify-center lg:justify-between gap-6">
-        {/* Editor con barra de herramientas vertical */}
+        {/* Panel de edición */}
         <div className="relative bg-white rounded-lg shadow-md overflow-hidden flex">
-          {/* Barra de herramientas vertical */}
+          {/* Barra de herramientas */}
           <div className="bg-gray-100 p-2 flex flex-col gap-2 justify-start rounded-l-lg">
+            {/* Herramienta GrabCut */}
             <button
               className={`w-full p-2 rounded ${
-                selectedTool === TOOLS.GRABCUT
+                tool === TOOLS.GRABCUT
                   ? "bg-blue-500 text-white"
                   : "bg-white border border-gray-300"
               }`}
-              onClick={() => handleToolChange(TOOLS.GRABCUT)}
+              onClick={() => changeTool(TOOLS.GRABCUT)}
               disabled={!isOpenCVReady}
               title="GrabCut - Selección rectangular"
             >
@@ -330,13 +402,14 @@ export default function ImageMask({ imageUrl, instanceId }) {
               </div>
             </button>
 
+            {/* Herramienta Magic Wand */}
             <button
               className={`w-full p-2 rounded ${
-                selectedTool === TOOLS.MAGIC_WAND
+                tool === TOOLS.MAGIC_WAND
                   ? "bg-blue-500 text-white"
                   : "bg-white border border-gray-300"
               }`}
-              onClick={() => handleToolChange(TOOLS.MAGIC_WAND)}
+              onClick={() => changeTool(TOOLS.MAGIC_WAND)}
               title="Varita Mágica - Selección por color"
               disabled={!isOpenCVReady}
             >
@@ -347,15 +420,17 @@ export default function ImageMask({ imageUrl, instanceId }) {
               </div>
             </button>
 
+            {/* Separador */}
             <div className="border-t border-gray-300 my-2"></div>
 
+            {/* Botón de modo */}
             <button
               className={`w-full p-2 rounded ${
                 mode === MODES.ADD
                   ? "bg-green-500 text-white"
                   : "bg-red-500 text-white"
               }`}
-              onClick={handleModeChange}
+              onClick={toggleMode}
               title={
                 mode === MODES.ADD
                   ? "Modo: Añadir selección"
@@ -367,23 +442,11 @@ export default function ImageMask({ imageUrl, instanceId }) {
               </div>
             </button>
 
-            {selectedTool === TOOLS.GRABCUT && hasSelection && (
-              <button
-                className="w-full p-2 rounded bg-purple-500 text-white"
-                onClick={() => {}}
-                disabled={!hasSelection || !isOpenCVReady}
-                title="Aplicar GrabCut a la selección"
-              >
-                <div className="flex justify-center items-center">
-                  <span>✓</span>
-                </div>
-              </button>
-            )}
-
+            {/* Botón reset */}
             <button
               className="w-full p-2 rounded bg-gray-500 text-white mt-auto"
               onClick={resetAll}
-              disabled={!isMaskApplied && !hasSelection}
+              disabled={!hasMask && !selection.active}
               title="Resetear todo"
             >
               <div className="flex justify-center items-center">
@@ -394,20 +457,23 @@ export default function ImageMask({ imageUrl, instanceId }) {
             </button>
           </div>
 
-          {/* Contenedor del editor */}
+          {/* Área de edición */}
           <div className="relative">
             <div className="bg-gray-50 py-2 px-4 border-b">
               <h3 className="text-lg font-medium text-gray-700 text-center">
                 Editor
               </h3>
             </div>
+
+            {/* Área de canvas */}
             <div
               className="relative"
               style={{
-                width: `${imageDimensions.width}px`,
-                height: `${imageDimensions.height}px`,
+                width: `${dimensions.width}px`,
+                height: `${dimensions.height}px`,
               }}
             >
+              {/* Overlay de carga */}
               {!isOpenCVReady && (
                 <div className="absolute inset-0 bg-gray-200 bg-opacity-75 flex items-center justify-center z-50">
                   <div className="flex flex-col items-center">
@@ -419,39 +485,32 @@ export default function ImageMask({ imageUrl, instanceId }) {
                 </div>
               )}
 
+              {/* Capas de canvas */}
               <canvas
-                ref={canvasRef}
+                ref={canvasRefs.main}
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
                 className="absolute top-0 left-0"
-                style={{
-                  zIndex: 1,
-                  cursor:
-                    selectedTool === TOOLS.GRABCUT
-                      ? isMaskApplied
-                        ? "default"
-                        : "crosshair"
-                      : "pointer",
-                }}
+                style={{ zIndex: 1, cursor }}
               />
-
               <canvas
-                ref={maskCanvasRef}
+                ref={canvasRefs.mask}
                 className="absolute top-0 left-0 pointer-events-none"
                 style={{ zIndex: 2 }}
               />
-
               <canvas
-                ref={selectionRef}
+                ref={canvasRefs.selection}
                 className="absolute top-0 left-0 pointer-events-none"
                 style={{ zIndex: 3 }}
               />
+            </div>
 
-              {/* Área para botones contextuales */}
-              {contextualButtons.length > 0 && (
-                <div className="absolute bottom-4 right-4 flex gap-2 z-10">
-                  {contextualButtons.map((button, index) => (
+            {/* Botones contextuales */}
+            <div className="bg-gray-50 py-2 px-4 border-t">
+              {buttons.length > 0 && (
+                <div className="flex gap-2 z-10 justify-end">
+                  {buttons.map((button, index) => (
                     <button
                       key={index}
                       className={`p-2 rounded ${
@@ -469,34 +528,41 @@ export default function ImageMask({ imageUrl, instanceId }) {
           </div>
         </div>
 
-        {/* Vista Previa */}
+        {/* Panel de vista previa */}
         <div className="relative bg-white rounded-lg shadow-md overflow-hidden">
           <div className="bg-gray-50 py-2 px-4 border-b">
             <h3 className="text-lg font-medium text-gray-700 text-center">
               Vista Previa
             </h3>
           </div>
+
           <div
             className="relative"
             style={{
-              width: `${imageDimensions.width}px`,
-              height: `${imageDimensions.height}px`,
+              width: `${dimensions.width}px`,
+              height: `${dimensions.height}px`,
             }}
           >
-            <canvas ref={previewCanvasRef} className="absolute top-0 left-0" />
+            <canvas
+              ref={canvasRefs.preview}
+              className="absolute top-0 left-0"
+            />
 
-            {!isMaskApplied && (
-              <div className="absolute inset-0 flex items-center justify-center text-center p-4 bg-gray-50 bg-opacity-80">
-                <p className="text-gray-600 max-w-xs">
-                  {selectedTool === TOOLS.GRABCUT
-                    ? "Use la herramienta GrabCut para segmentar el objeto"
-                    : "Use la varita mágica para seleccionar áreas de color similar"}
-                </p>
-              </div>
-            )}
+            {/* Mensaje de overlay */}
+            <div
+              ref={overlayRef}
+              className="absolute inset-0 flex items-center justify-center text-center p-4 bg-gray-50 bg-opacity-80"
+              style={{ display: hasMask ? "none" : "flex" }}
+            >
+              <p className="text-gray-600 max-w-xs">
+                {tool === TOOLS.GRABCUT
+                  ? "Use la herramienta GrabCut para segmentar el objeto"
+                  : "Use la varita mágica para seleccionar áreas de color similar"}
+              </p>
+            </div>
           </div>
 
-          {/* Indicador del modo actual */}
+          {/* Indicador de modo */}
           <div className="bg-gray-50 py-2 px-4 border-t">
             <div className="flex justify-center">
               <span
