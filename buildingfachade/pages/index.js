@@ -30,7 +30,7 @@ const Home = () => {
 
       {showModelViewer && uploadedModel && (
         <div className="w-full max-w-6xl bg-white rounded-lg shadow-lg p-6">
-          <h2 className="text-2xl font-bold text-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-900 text-center mb-6">
             3D Model Viewer
           </h2>
           <ModelViewer modelName={uploadedModel.modelName} />
