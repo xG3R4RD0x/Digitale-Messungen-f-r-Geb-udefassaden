@@ -17,16 +17,13 @@ const upload = async (req, res) => {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
 
-    // Create a new formidable instance correctly based on the version
-    // Formidable v4 uses a function call directly, not a constructor pattern
     const form = formidable({
       uploadDir,
       keepExtensions: true,
-      maxFileSize: 100 * 1024 * 1024, // 100MB max file size
+      maxFileSize: 250 * 1024 * 1024, // 250MB max file size
       multiples: true,
     });
 
-    // Wrap form parsing in a promise for better error handling
     const parseForm = async (req) => {
       return new Promise((resolve, reject) => {
         form.parse(req, (err, fields, files) => {
@@ -38,15 +35,13 @@ const upload = async (req, res) => {
 
     const { fields, files } = await parseForm(req);
 
-    // Verify we have the modelName
     const modelName = fields?.modelName || "unnamed_model";
 
-    // Verify we have files
     if (!files || Object.keys(files).length === 0) {
       return res.status(400).json({ error: "No files uploaded" });
     }
 
-    // Normalize files data structure - formidable returns different structures based on version
+    // Normalize files data structure
     let filesArray = [];
     if (files.files) {
       // Handle files.files structure
@@ -101,13 +96,11 @@ const upload = async (req, res) => {
         });
       } catch (fileErr) {
         console.error("Error processing file:", fileErr);
-        // Continue with other files
       }
     }
 
     console.log("Successfully processed files:", uploadedFiles.length);
 
-    // Return success response
     res.status(200).json({
       success: true,
       modelName,

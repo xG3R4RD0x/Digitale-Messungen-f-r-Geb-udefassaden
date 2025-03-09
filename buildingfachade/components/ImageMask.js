@@ -88,8 +88,6 @@ export default function ImageMask({ imageUrl, instanceId }) {
       // Clear previous buttons
       setButtons([]);
 
-      // Try to preload Magic Wand library when component mounts
-      // This helps ensure it's ready when needed
       if (tool === TOOLS.MAGIC_WAND || !window.magicWandPreloaded) {
         const script = document.createElement("script");
         script.src =
@@ -178,7 +176,7 @@ export default function ImageMask({ imageUrl, instanceId }) {
 
   // ========== MASK AND PREVIEW FUNCTIONS ==========
 
-  // Apply mask to preview - Modified to ensure consistent color application
+  // Apply mask to preview
   function applyMaskToPreview(force = false) {
     const { main, mask, preview } = canvasRefs;
     if (!preview.current || !mask.current || !main.current) return;
@@ -207,7 +205,6 @@ export default function ImageMask({ imageUrl, instanceId }) {
         if (maskImage.data[i + 3] > 0) {
           pixelsFound = true;
 
-          // Efecto visual consistente para objeto seleccionado
           previewImage.data[i] *= 0.8; // R
           previewImage.data[i + 1] *= 0.8; // G
           previewImage.data[i + 2] = Math.min(
@@ -215,7 +212,6 @@ export default function ImageMask({ imageUrl, instanceId }) {
             previewImage.data[i + 2] * 1.2
           ); // B
         } else {
-          // Semi-transparencia para fondo - consistente
           previewImage.data[i + 3] = 100; // Alpha
         }
       }
@@ -242,7 +238,6 @@ export default function ImageMask({ imageUrl, instanceId }) {
     if (maskData && canvasRefs.mask.current) {
       const maskCtx = canvasRefs.mask.current.getContext("2d");
 
-      // Importante: aplicar exactamente la misma maskData que teníamos
       maskCtx.putImageData(maskData, 0, 0);
 
       if (hasMask) {
@@ -259,11 +254,9 @@ export default function ImageMask({ imageUrl, instanceId }) {
 
   // ========== EVENT HANDLERS ==========
 
-  // Tool change - Mejorada para preservar selecciones
   const changeTool = (newTool) => {
     if (tool === newTool) return;
 
-    // Guardar el estado actual de la máscara antes de cambiar de herramienta
     if (canvasRefs.mask.current) {
       const maskCtx = canvasRefs.mask.current.getContext("2d");
       const currentMaskData = maskCtx.getImageData(

@@ -150,7 +150,6 @@ export default function ModelViewer({ modelName }) {
       <div className="mt-4 bg-white">
         {images.map((image, index) => (
           <div key={index} className="mb-4">
-            {/* <img src={image.url} alt={`Captura del modelo - ${image.view}`} /> */}
             <ImageMask
               imageUrl={image.url}
               instanceId={`model-side-${image.view}`}
