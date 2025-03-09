@@ -88,6 +88,18 @@ export default function ImageMask({ imageUrl, instanceId }) {
       // Clear previous buttons
       setButtons([]);
 
+      // Try to preload Magic Wand library when component mounts
+      // This helps ensure it's ready when needed
+      if (tool === TOOLS.MAGIC_WAND || !window.magicWandPreloaded) {
+        const script = document.createElement("script");
+        script.src =
+          "https://cdn.jsdelivr.net/gh/Tamersoul/magic-wand-js@master/magic-wand.js";
+        script.async = true;
+        script.id = "magic-wand-preload";
+        document.body.appendChild(script);
+        window.magicWandPreloaded = true;
+      }
+
       const toolInterface = initializeTool(tool, {
         canvasRef: canvasRefs.main,
         maskCanvasRef: canvasRefs.mask,
@@ -410,7 +422,7 @@ export default function ImageMask({ imageUrl, instanceId }) {
                   : "bg-white border border-gray-300"
               }`}
               onClick={() => changeTool(TOOLS.MAGIC_WAND)}
-              title="Magic Wand - Color-based selection"
+              title="Magic Wand - Select areas with similar color by clicking"
               disabled={!isOpenCVReady}
             >
               <div className="flex justify-center items-center">
@@ -556,8 +568,10 @@ export default function ImageMask({ imageUrl, instanceId }) {
             >
               <p className="text-gray-600 max-w-xs">
                 {tool === TOOLS.GRABCUT
-                  ? "Use the GrabCut tool to segment the object"
-                  : "Use the Magic Wand to select areas of similar color"}
+                  ? "Dibuja un rectángulo alrededor del objeto a segmentar"
+                  : tool === TOOLS.MAGIC_WAND
+                  ? "Haz clic en un área con color similar para seleccionarla. Ajusta la tolerancia con los botones + y -"
+                  : "Selecciona una herramienta para segmentar la imagen"}
               </p>
             </div>
           </div>
