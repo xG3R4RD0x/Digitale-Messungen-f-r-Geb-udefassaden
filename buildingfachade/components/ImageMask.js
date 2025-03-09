@@ -88,8 +88,6 @@ export default function ImageMask({ imageUrl, instanceId }) {
       // Clear previous buttons
       setButtons([]);
 
-      // Try to preload Magic Wand library when component mounts
-      // This helps ensure it's ready when needed
       if (tool === TOOLS.MAGIC_WAND || !window.magicWandPreloaded) {
         const script = document.createElement("script");
         script.src =
@@ -178,7 +176,7 @@ export default function ImageMask({ imageUrl, instanceId }) {
 
   // ========== MASK AND PREVIEW FUNCTIONS ==========
 
-  // Apply mask to preview - Modified to ensure consistent color application
+  // Apply mask to preview
   function applyMaskToPreview(force = false) {
     const { main, mask, preview } = canvasRefs;
     if (!preview.current || !mask.current || !main.current) return;
@@ -207,7 +205,6 @@ export default function ImageMask({ imageUrl, instanceId }) {
         if (maskImage.data[i + 3] > 0) {
           pixelsFound = true;
 
-          // Efecto visual consistente para objeto seleccionado
           previewImage.data[i] *= 0.8; // R
           previewImage.data[i + 1] *= 0.8; // G
           previewImage.data[i + 2] = Math.min(
@@ -215,7 +212,6 @@ export default function ImageMask({ imageUrl, instanceId }) {
             previewImage.data[i + 2] * 1.2
           ); // B
         } else {
-          // Semi-transparencia para fondo - consistente
           previewImage.data[i + 3] = 100; // Alpha
         }
       }
@@ -242,7 +238,6 @@ export default function ImageMask({ imageUrl, instanceId }) {
     if (maskData && canvasRefs.mask.current) {
       const maskCtx = canvasRefs.mask.current.getContext("2d");
 
-      // Importante: aplicar exactamente la misma maskData que teníamos
       maskCtx.putImageData(maskData, 0, 0);
 
       if (hasMask) {
@@ -259,11 +254,9 @@ export default function ImageMask({ imageUrl, instanceId }) {
 
   // ========== EVENT HANDLERS ==========
 
-  // Tool change - Mejorada para preservar selecciones
   const changeTool = (newTool) => {
     if (tool === newTool) return;
 
-    // Guardar el estado actual de la máscara antes de cambiar de herramienta
     if (canvasRefs.mask.current) {
       const maskCtx = canvasRefs.mask.current.getContext("2d");
       const currentMaskData = maskCtx.getImageData(
@@ -389,6 +382,76 @@ export default function ImageMask({ imageUrl, instanceId }) {
         isSelecting: false,
         active: valid,
       }));
+    }
+  };
+
+  // Download the masked image - Modified to extract segmented object only
+  const downloadMaskedImage = () => {
+    if (!hasMask || !canvasRefs.main.current || !canvasRefs.mask.current)
+      return;
+
+    try {
+      // Create a temporary canvas for the segmented image
+      const tempCanvas = document.createElement("canvas");
+      const width = canvasRefs.main.current.width;
+      const height = canvasRefs.main.current.height;
+      tempCanvas.width = width;
+      tempCanvas.height = height;
+      const tempCtx = tempCanvas.getContext("2d");
+
+      // Get original image data
+      const mainCtx = canvasRefs.main.current.getContext("2d");
+      const originalImage = mainCtx.getImageData(0, 0, width, height);
+
+      // Get mask data
+      const maskCtx = canvasRefs.mask.current.getContext("2d");
+      const maskImage = maskCtx.getImageData(0, 0, width, height);
+
+      // Create a new ImageData with transparent background
+      const segmentedImage = tempCtx.createImageData(width, height);
+
+      // Copy only pixels where the mask exists
+      for (let i = 0; i < originalImage.data.length; i += 4) {
+        if (maskImage.data[i + 3] > 0) {
+          // Copy RGB values from original image
+          segmentedImage.data[i] = originalImage.data[i]; // R
+          segmentedImage.data[i + 1] = originalImage.data[i + 1]; // G
+          segmentedImage.data[i + 2] = originalImage.data[i + 2]; // B
+          segmentedImage.data[i + 3] = 255; // A (fully opaque)
+        } else {
+          // Set transparent pixels
+          segmentedImage.data[i + 3] = 0; // A (transparent)
+        }
+      }
+
+      // Put the segmented image on the canvas
+      tempCtx.putImageData(segmentedImage, 0, 0);
+
+      // Convert canvas to blob
+      tempCanvas.toBlob((blob) => {
+        // Create a download link and trigger download
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `segmented_${new Date().getTime()}.png`;
+        document.body.appendChild(a);
+        a.click();
+
+        // Clean up
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }, 100);
+
+        setError("Segmented image downloaded successfully!");
+
+        // Clear error message after 3 seconds
+        setTimeout(() => {
+          setError("");
+        }, 3000);
+      }, "image/png");
+    } catch (err) {
+      setError(`Error downloading segmented image: ${err.message}`);
     }
   };
 
@@ -593,20 +656,33 @@ export default function ImageMask({ imageUrl, instanceId }) {
                   : "Select a tool to segment the image"}
               </p>
             </div>
+          </div>
+          {/* Mode indicator */}
+          <div className="bg-gray-50 py-2 px-4 border-t">
+            <div className="flex justify-between items-center">
+              <span
+                className={`px-3 py-1 text-sm rounded-full ${
+                  mode === MODES.ADD
+                    ? "bg-green-100 text-green-800"
+                    : "bg-red-100 text-red-800"
+                }`}
+              >
+                Mode: {mode === MODES.ADD ? "Add" : "Remove"}
+              </span>
 
-            {/* Mode indicator */}
-            <div className="bg-gray-50 py-2 px-4 border-t">
-              <div className="flex justify-center">
-                <span
-                  className={`px-3 py-1 text-sm rounded-full ${
-                    mode === MODES.ADD
-                      ? "bg-green-100 text-green-800"
-                      : "bg-red-100 text-red-800"
-                  }`}
-                >
-                  Mode: {mode === MODES.ADD ? "Add" : "Remove"}
+              {/* Download button */}
+              <button
+                onClick={downloadMaskedImage}
+                disabled={!hasMask}
+                className={`ml-2 px-3 py-1 text-sm rounded-full bg-blue-500 hover:bg-blue-700 text-white flex items-center ${
+                  !hasMask ? "opacity-50 cursor-not-allowed" : ""
+                }`}
+                title="Download image with mask applied"
+              >
+                <span role="img" aria-label="download">
+                  ⬇️ Download
                 </span>
-              </div>
+              </button>
             </div>
           </div>
         </div>
