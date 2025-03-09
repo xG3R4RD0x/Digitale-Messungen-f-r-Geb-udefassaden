@@ -14,6 +14,7 @@
     "@tailwindcss/postcss": "^4.0.5",
     "@techstark/opencv-js": "^4.10.0-release.1",
     "autoprefixer": "^10.4.20",
+    "formidable": "^3.5.2",
     "next": "latest",
     "postcss": "^8.5.1",
     "react": "latest",

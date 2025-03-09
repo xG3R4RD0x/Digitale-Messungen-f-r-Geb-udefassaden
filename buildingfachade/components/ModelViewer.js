@@ -104,32 +104,34 @@ export default function ModelViewer({ modelName }) {
 
   return (
     <div className="flex flex-col items-center justify-center">
-      <div
-        className="bg-white"
-        style={{ height: "300px", width: "400px", position: "relative" }} // Ajusta el tamaño del Canvas aquí
-      >
-        <Canvas
-          camera={{ position: [0, 0, 30], fov: 45 }} // Ajusta la posición de la cámara aquí
-          onCreated={({ gl, scene, camera }) => {
-            setGl(gl);
-            setScene(scene);
-            setCamera(camera);
-            cameraRef.current = camera;
-          }}
+      <div className="bg-gray-50 p-4 rounded-2xl shadow-lg mb-2">
+        <div
+          className="bg-white p-4 shadow-lg"
+          style={{ height: "300px", width: "400px", position: "relative" }} // Ajusta el tamaño del Canvas aquí
         >
-          <ambientLight intensity={0.5} />
-          <directionalLight
-            position={[10, 10, 10]}
-            intensity={1}
-            castShadow
-            shadow-mapSize-width={1024}
-            shadow-mapSize-height={1024}
-          />
-          <group ref={modelRef}>
-            <Model objPath={objPath} mtlPath={mtlPath} />
-          </group>
-          <OrbitControls />
-        </Canvas>
+          <Canvas
+            camera={{ position: [0, 0, 30], fov: 45 }} // Ajusta la posición de la cámara aquí
+            onCreated={({ gl, scene, camera }) => {
+              setGl(gl);
+              setScene(scene);
+              setCamera(camera);
+              cameraRef.current = camera;
+            }}
+          >
+            <ambientLight intensity={0.5} />
+            <directionalLight
+              position={[10, 10, 10]}
+              intensity={1}
+              castShadow
+              shadow-mapSize-width={1024}
+              shadow-mapSize-height={1024}
+            />
+            <group ref={modelRef}>
+              <Model objPath={objPath} mtlPath={mtlPath} />
+            </group>
+            <OrbitControls />
+          </Canvas>
+        </div>
       </div>
       {/* Rotation Controls */}
       <RotationControls

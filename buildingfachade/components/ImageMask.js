@@ -587,26 +587,26 @@ export default function ImageMask({ imageUrl, instanceId }) {
             >
               <p className="text-gray-600 max-w-xs">
                 {tool === TOOLS.GRABCUT
-                  ? "Dibuja un rectángulo alrededor del objeto a segmentar"
+                  ? "Draw a rectangle around the object you want to segment"
                   : tool === TOOLS.MAGIC_WAND
-                  ? "Haz clic en un área con color similar para seleccionarla. Ajusta la tolerancia con los botones + y -"
-                  : "Selecciona una herramienta para segmentar la imagen"}
+                  ? "Click on an area with similar color to select it. Adjust tolerance using + and - buttons"
+                  : "Select a tool to segment the image"}
               </p>
             </div>
-          </div>
 
-          {/* Mode indicator */}
-          <div className="bg-gray-50 py-2 px-4 border-t">
-            <div className="flex justify-center">
-              <span
-                className={`px-3 py-1 text-sm rounded-full ${
-                  mode === MODES.ADD
-                    ? "bg-green-100 text-green-800"
-                    : "bg-red-100 text-red-800"
-                }`}
-              >
-                Mode: {mode === MODES.ADD ? "Add" : "Remove"}
-              </span>
+            {/* Mode indicator */}
+            <div className="bg-gray-50 py-2 px-4 border-t">
+              <div className="flex justify-center">
+                <span
+                  className={`px-3 py-1 text-sm rounded-full ${
+                    mode === MODES.ADD
+                      ? "bg-green-100 text-green-800"
+                      : "bg-red-100 text-red-800"
+                  }`}
+                >
+                  Mode: {mode === MODES.ADD ? "Add" : "Remove"}
+                </span>
+              </div>
             </div>
           </div>
         </div>

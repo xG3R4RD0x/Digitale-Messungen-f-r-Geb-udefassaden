@@ -42,7 +42,7 @@ export default function GrabCutComponent(props) {
       registerToolButtons([
         {
           label: "Apply GrabCut",
-          icon: "✓",
+          icon: "Apply GrabCut ✓",
           title: "Apply GrabCut to the selection",
           className: "bg-purple-500 text-white ml-auto",
           onClick: processGrabCut,
@@ -277,7 +277,7 @@ export default function GrabCutComponent(props) {
     return maskData;
   };
 
-  // Apply mask to canvas - Updated to match Magic Wand's consistency
+  // Apply mask to canvas
   const applyMaskToCanvas = (maskData) => {
     const ctx = maskCanvasRef.current.getContext("2d");
     const imageData = ctx.getImageData(
@@ -294,14 +294,13 @@ export default function GrabCutComponent(props) {
 
       const pos = i * 4;
       if (isAddMode) {
-        // Add mode - Semi-transparent red color con valor fijo
         imageData.data[pos] = 255; // R
         imageData.data[pos + 1] = 0; // G
         imageData.data[pos + 2] = 0; // B
-        imageData.data[pos + 3] = 150; // A (mismo valor que en Magic Wand)
+        imageData.data[pos + 3] = 150; // A
       } else {
         // Subtract mode - Make transparent
-        imageData.data[pos + 3] = 0; // A (transparente)
+        imageData.data[pos + 3] = 0; // A
       }
     }
 
