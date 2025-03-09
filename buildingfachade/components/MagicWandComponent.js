@@ -21,7 +21,7 @@ export default function MagicWandComponent(props) {
   } = props;
 
   // Default settings for the Magic Wand
-  let tolerance = 1; // Default tolerance
+  let tolerance = 1; // Aumentado el valor predeterminado para mejor usabilidad
   const colorSpace = "RGB"; // Default color space
 
   // Always use pointer cursor for this tool
@@ -225,11 +225,24 @@ export default function MagicWandComponent(props) {
 
       console.log(`Selection created with ${selection.length} boundary points`);
 
-      // Visualize the selection
-      drawSelection(selection);
-
-      // Apply to mask
+      // Aplicar a la máscara primero
       applyToMask(mask);
+
+      // Mostrar el contorno temporalmente por 500ms y luego limpiarlo
+      // para que solo quede la máscara consistente
+      drawSelection(selection);
+      setTimeout(() => {
+        // Limpiar la selección para que solo se vea en la máscara
+        if (selectionRef.current) {
+          const ctx = selectionRef.current.getContext("2d");
+          ctx.clearRect(
+            0,
+            0,
+            selectionRef.current.width,
+            selectionRef.current.height
+          );
+        }
+      }, 500);
 
       // Update preview
       updatePreview(true);
@@ -241,8 +254,6 @@ export default function MagicWandComponent(props) {
       setErrorMessage(`Magic Wand error: ${error.message || "Unknown error"}`);
     }
   };
-
-  // ... existing code for handleMouseDown, handleMouseMove, handleMouseUp ...
 
   // Mouse event handlers
   const handleMouseDown = (e) => {
@@ -279,9 +290,11 @@ export default function MagicWandComponent(props) {
     return true;
   };
 
-  // Draw selection outline
+  // Draw selection outline - Usando color rojo consistentemente
   const drawSelection = (selection) => {
     const ctx = selectionRef.current.getContext("2d");
+
+    // Limpiar completamente el canvas de selección
     ctx.clearRect(
       0,
       0,
@@ -289,7 +302,15 @@ export default function MagicWandComponent(props) {
       selectionRef.current.height
     );
 
-    // Draw the selection outline
+    // Si no hay puntos, no hacemos nada más
+    if (!selection || selection.length === 0) return;
+
+    // Configurar el estilo gráfico para el contorno
+    ctx.strokeStyle = "red"; // ROJO siempre
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]); // Línea sólida, no punteada
+
+    // Dibujar el contorno
     ctx.beginPath();
     for (let i = 0; i < selection.length; i++) {
       const point = selection[i];
@@ -300,42 +321,57 @@ export default function MagicWandComponent(props) {
       }
     }
     ctx.closePath();
-    ctx.strokeStyle = "blue";
-    ctx.lineWidth = 2;
+
+    // Rellenar con color semitransparente
+    ctx.fillStyle = "rgba(255, 0, 0, 0.2)"; // Rojo semitransparente
+    ctx.fill();
+
+    // Dibujar el contorno
     ctx.stroke();
+
+    console.log("Selection drawn with RED color");
   };
 
-  // Apply the selection to mask
+  // Apply the selection to mask - Mejorado para preservar selecciones previas
   const applyToMask = (mask) => {
+    if (!mask || !maskCanvasRef.current) return;
+
     const ctx = maskCanvasRef.current.getContext("2d");
-    const imageData = ctx.getImageData(
-      0,
-      0,
-      maskCanvasRef.current.width,
-      maskCanvasRef.current.height
-    );
-
-    const isAddMode = mode === "add" || !mode;
     const width = canvasRef.current.width;
+    const height = canvasRef.current.height;
 
-    // Apply the mask
-    for (let i = 0; i < mask.length; i++) {
-      if (!mask[i]) continue;
+    // Obtener los datos actuales de la máscara
+    const imageData = ctx.getImageData(0, 0, width, height);
+    const isAddMode = mode === "add" || !mode;
 
-      const pos = i * 4;
-      if (isAddMode) {
-        // Add mode - Semi-transparent red color
-        imageData.data[pos] = 255; // R
-        imageData.data[pos + 1] = 0; // G
-        imageData.data[pos + 2] = 0; // B
-        imageData.data[pos + 3] = 128; // A (semi-transparent)
-      } else {
-        // Subtract mode - Make transparent
-        imageData.data[pos + 3] = 0; // A (transparent)
+    console.log(`Applying mask in ${isAddMode ? "ADD" : "SUBTRACT"} mode`);
+
+    // Aplicar la máscara
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const pos = y * width + x; // Posición en la máscara
+        const dataPos = pos * 4; // Posición en los datos de imagen (RGBA)
+
+        if (mask[pos]) {
+          // Si este pixel está en la selección
+          if (isAddMode) {
+            // Modo ADD - Pintar rojo con transparencia fija constante
+            imageData.data[dataPos] = 255; // R
+            imageData.data[dataPos + 1] = 0; // G
+            imageData.data[dataPos + 2] = 0; // B
+            imageData.data[dataPos + 3] = 150; // A (valor constante para mejor visibilidad)
+          } else {
+            // Modo SUBTRACT - Hacer transparente completamente
+            imageData.data[dataPos + 3] = 0; // A (transparente)
+          }
+        }
       }
     }
 
+    // Colocar los datos de vuelta en el canvas
     ctx.putImageData(imageData, 0, 0);
+
+    // Notificar que se ha aplicado una máscara
     setIsMaskApplied(true);
   };
 

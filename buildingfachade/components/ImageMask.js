@@ -178,7 +178,7 @@ export default function ImageMask({ imageUrl, instanceId }) {
 
   // ========== MASK AND PREVIEW FUNCTIONS ==========
 
-  // Apply mask to preview
+  // Apply mask to preview - Modified to ensure consistent color application
   function applyMaskToPreview(force = false) {
     const { main, mask, preview } = canvasRefs;
     if (!preview.current || !mask.current || !main.current) return;
@@ -207,7 +207,7 @@ export default function ImageMask({ imageUrl, instanceId }) {
         if (maskImage.data[i + 3] > 0) {
           pixelsFound = true;
 
-          // Visual effect - bluish tint for selected object
+          // Efecto visual consistente para objeto seleccionado
           previewImage.data[i] *= 0.8; // R
           previewImage.data[i + 1] *= 0.8; // G
           previewImage.data[i + 2] = Math.min(
@@ -215,46 +215,65 @@ export default function ImageMask({ imageUrl, instanceId }) {
             previewImage.data[i + 2] * 1.2
           ); // B
         } else {
-          // Semi-transparency for background
+          // Semi-transparencia para fondo - consistente
           previewImage.data[i + 3] = 100; // Alpha
         }
       }
 
       previewCtx.putImageData(previewImage, 0, 0);
 
-      // Update state if necessary
+      // Update state if necessary - important to maintain hasMask true if pixels found
       if (pixelsFound !== hasMask) {
         setHasMask(pixelsFound);
+      } else if (pixelsFound) {
+        // Ensure mask is recognized even if state hasn't changed
+        setHasMask(true);
       }
 
-      // Update overlay
+      // Always update overlay based on pixels found
       if (overlayRef.current) {
         overlayRef.current.style.display = pixelsFound ? "none" : "flex";
       }
     }
   }
 
-  // Restore saved mask when changing tools
+  // Restore saved mask when changing tools or when maskData changes
   useEffect(() => {
-    if (maskData && canvasRefs.mask.current && hasMask) {
+    if (maskData && canvasRefs.mask.current) {
       const maskCtx = canvasRefs.mask.current.getContext("2d");
+
+      // Importante: aplicar exactamente la misma maskData que teníamos
       maskCtx.putImageData(maskData, 0, 0);
 
-      // Force update of preview
-      setTimeout(() => applyMaskToPreview(true), 0);
+      if (hasMask) {
+        // Force update of preview to ensure mask is visible
+        setTimeout(() => applyMaskToPreview(true), 50);
 
-      // Hide overlay
-      if (overlayRef.current) {
-        overlayRef.current.style.display = "none";
+        // Hide overlay
+        if (overlayRef.current) {
+          overlayRef.current.style.display = "none";
+        }
       }
     }
   }, [tool, maskData]);
 
   // ========== EVENT HANDLERS ==========
 
-  // Tool change
+  // Tool change - Mejorada para preservar selecciones
   const changeTool = (newTool) => {
     if (tool === newTool) return;
+
+    // Guardar el estado actual de la máscara antes de cambiar de herramienta
+    if (canvasRefs.mask.current) {
+      const maskCtx = canvasRefs.mask.current.getContext("2d");
+      const currentMaskData = maskCtx.getImageData(
+        0,
+        0,
+        canvasRefs.mask.current.width,
+        canvasRefs.mask.current.height
+      );
+      setMaskData(currentMaskData);
+    }
 
     // Clear selection but keep mask
     resetSelectionOnly();
