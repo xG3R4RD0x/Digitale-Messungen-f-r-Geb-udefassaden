@@ -20,7 +20,7 @@ const upload = async (req, res) => {
     const form = formidable({
       uploadDir,
       keepExtensions: true,
-      maxFileSize: 250 * 1024 * 1024, // 250MB max file size
+      maxFileSize: 1024 * 1024 * 1024, // 1GB max file size
       multiples: true,
     });
 
